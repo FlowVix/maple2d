@@ -1,0 +1,21 @@
+[package]
+name = "maple2d"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wgpu = "26.0.1"
+winit = "0.30.12"
+image = "0.25.6"
+bytemuck = { version = "1.23.1", features = ["derive"] }
+parking_lot = "0.12.4"
+pollster = "0.4.0"
+palette = "0.7.6"
+slotmap = "1.0.7"
+glam = "0.30.5"
+i_overlay = "4.0.2"
+i_triangle = "0.36.3"
+itertools = "0.14.0"
+
+[build-dependencies]
+wgsl-grease = { git = "https://github.com/OnyxUI/wgsl-grease.git" }
