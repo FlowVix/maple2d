@@ -14,7 +14,7 @@ use glam::{UVec2, Vec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
 use wgpu::util::DeviceExt;
-use winit::window::Window;
+use winit::{keyboard::SmolStr, window::Window};
 
 use crate::{
     canvas::{Canvas, CanvasKey},
@@ -46,7 +46,7 @@ pub struct Context {
 
     // input related
     pub(crate) mouse_pos: Vec2,
-    pub(crate) key_info: AHashMap<Key, KeyInfo>,
+    pub(crate) key_info: AHashMap<EitherKey, KeyInfo>,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -97,18 +97,25 @@ pub struct BufferCacheValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Key {
+pub enum EitherKey {
     Physical(winit::keyboard::PhysicalKey),
     Logical(winit::keyboard::Key),
 }
-impl From<winit::keyboard::PhysicalKey> for Key {
+impl From<winit::keyboard::PhysicalKey> for EitherKey {
     fn from(value: winit::keyboard::PhysicalKey) -> Self {
         Self::Physical(value)
     }
 }
-impl From<winit::keyboard::Key> for Key {
-    fn from(value: winit::keyboard::Key) -> Self {
-        Self::Logical(value)
+impl<S: Into<SmolStr>> From<winit::keyboard::Key<S>> for EitherKey {
+    fn from(value: winit::keyboard::Key<S>) -> Self {
+        Self::Logical(match value {
+            winit::keyboard::Key::Named(named_key) => winit::keyboard::Key::Named(named_key),
+            winit::keyboard::Key::Character(s) => winit::keyboard::Key::Character(s.into()),
+            winit::keyboard::Key::Unidentified(native_key) => {
+                winit::keyboard::Key::Unidentified(native_key)
+            }
+            winit::keyboard::Key::Dead(c) => winit::keyboard::Key::Dead(c),
+        })
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -283,19 +290,19 @@ impl Context {
         self.fixed_tick
     }
 
-    pub fn is_key_pressed(&self, key: impl Into<Key>) -> bool {
+    pub fn is_key_pressed(&self, key: impl Into<EitherKey>) -> bool {
         self.key_info
             .get(&key.into())
             .map(|v| v.pressed)
             .unwrap_or(false)
     }
-    pub fn is_key_released(&self, key: impl Into<Key>) -> bool {
+    pub fn is_key_released(&self, key: impl Into<EitherKey>) -> bool {
         self.key_info
             .get(&key.into())
             .map(|v| !v.pressed)
             .unwrap_or(true)
     }
-    pub fn is_key_just_pressed(&self, key: impl Into<Key>) -> bool {
+    pub fn is_key_just_pressed(&self, key: impl Into<EitherKey>) -> bool {
         self.key_info
             .get(&key.into())
             .map(|v| {
@@ -306,7 +313,7 @@ impl Context {
             })
             .unwrap_or(false)
     }
-    pub fn is_key_just_released(&self, key: impl Into<Key>) -> bool {
+    pub fn is_key_just_released(&self, key: impl Into<EitherKey>) -> bool {
         self.key_info
             .get(&key.into())
             .map(|v| {

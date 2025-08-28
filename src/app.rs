@@ -11,7 +11,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
-use crate::context::{CanvasContext, Context, ContextRunMode, Key, KeyInfo};
+use crate::context::{CanvasContext, Context, ContextRunMode, EitherKey, KeyInfo};
 use crate::render::GPUData;
 use crate::state::AppState;
 
@@ -102,8 +102,8 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
-                    let k1 = Key::Physical(event.physical_key);
-                    let k2 = Key::Logical(event.logical_key.clone());
+                    let k1 = EitherKey::Physical(event.physical_key);
+                    let k2 = EitherKey::Logical(event.logical_key.clone());
                     if event.state.is_pressed() {
                         for k in [k1, k2] {
                             let info = data.ctx.key_info.entry(k).or_insert(KeyInfo {

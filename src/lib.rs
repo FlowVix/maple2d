@@ -17,7 +17,7 @@ pub use canvas::{
     },
 };
 pub use context::{
-    CanvasContext, Context, Key, TextureBytesLoadError, TexturePathLoadError,
+    CanvasContext, Context, EitherKey, TextureBytesLoadError, TexturePathLoadError,
     texture::{TextureFilter, TextureKey},
 };
 pub use state::AppState;

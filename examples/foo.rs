@@ -8,7 +8,7 @@ use image::ImageReader;
 use itertools::Itertools;
 use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureKey, run_app};
 use winit::{
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::{Key, KeyCode, PhysicalKey},
     window::Window,
 };
 
@@ -25,22 +25,15 @@ impl AppState for State {
         Self { v: 0.0, tex }
     }
 
-    fn fixed_update(&mut self, ctx: &mut maple2d::Context) {
-        if ctx.is_key_just_pressed(PhysicalKey::Code(KeyCode::KeyA)) {
-            println!("bla fixed");
-        }
-    }
+    fn fixed_update(&mut self, ctx: &mut maple2d::Context) {}
 
     fn draw(&mut self, canvas: &mut maple2d::Canvas) {
-        if canvas
-            .ctx()
-            .is_key_just_pressed(PhysicalKey::Code(KeyCode::KeyA))
-        {
+        if canvas.ctx().is_key_just_pressed(Key::Character("f")) {
             println!("bla render");
         }
     }
 }
 
 fn main() {
-    run_app::<State>(10, Window::default_attributes());
+    run_app::<State>(60, Window::default_attributes());
 }
