@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use glam::{UVec2, Vec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
@@ -31,17 +31,22 @@ pub struct Context {
     pub(crate) window: Arc<Window>,
     pub(crate) gpu_data: GPUData,
     pub(crate) canvas_datas: SlotMap<CanvasKey, CanvasData>,
-
     pub(crate) loaded_textures: TextureMap,
 
-    pub(crate) mouse_pos: Vec2,
+    // maintenance
+    pub(crate) render_frame: u64,
+    pub(crate) fixed_tick: u64,
+    pub(crate) run_mode: ContextRunMode,
 
+    // drawing related
     pub(crate) current_canvas: Option<CanvasKey>,
-
     pub(crate) passes: Vec<RenderPass>,
     pub(crate) vertices: Vec<wgsl_common::structs::VertexInput>,
-
     pub(crate) buffer_cache: AHashMap<BufferCacheKey, BufferCacheValue>,
+
+    // input related
+    pub(crate) mouse_pos: Vec2,
+    pub(crate) key_info: AHashMap<Key, KeyInfo>,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -89,6 +94,37 @@ pub struct BufferCacheKey {
 pub struct BufferCacheValue {
     pub(crate) buffer: cosmic_text::Buffer,
     pub(crate) in_use: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Key {
+    Physical(winit::keyboard::PhysicalKey),
+    Logical(winit::keyboard::Key),
+}
+impl From<winit::keyboard::PhysicalKey> for Key {
+    fn from(value: winit::keyboard::PhysicalKey) -> Self {
+        Self::Physical(value)
+    }
+}
+impl From<winit::keyboard::Key> for Key {
+    fn from(value: winit::keyboard::Key) -> Self {
+        Self::Logical(value)
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct KeyInfo {
+    pub(crate) pressed: bool,
+    pub(crate) pressed_render_frame: Option<u64>,
+    pub(crate) released_render_frame: Option<u64>,
+    pub(crate) pressed_fixed_tick: Option<u64>,
+    pub(crate) released_fixed_tick: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContextRunMode {
+    None,
+    Render,
+    Fixed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -240,6 +276,47 @@ impl Context {
     pub fn font_system(&mut self) -> &mut cosmic_text::FontSystem {
         &mut self.gpu_data.font_system
     }
+    pub fn render_frame(&self) -> u64 {
+        self.render_frame
+    }
+    pub fn fixed_tick(&self) -> u64 {
+        self.fixed_tick
+    }
+
+    pub fn is_key_pressed(&self, key: impl Into<Key>) -> bool {
+        self.key_info
+            .get(&key.into())
+            .map(|v| v.pressed)
+            .unwrap_or(false)
+    }
+    pub fn is_key_released(&self, key: impl Into<Key>) -> bool {
+        self.key_info
+            .get(&key.into())
+            .map(|v| !v.pressed)
+            .unwrap_or(true)
+    }
+    pub fn is_key_just_pressed(&self, key: impl Into<Key>) -> bool {
+        self.key_info
+            .get(&key.into())
+            .map(|v| {
+                self.run_mode == ContextRunMode::Render
+                    && Some(self.render_frame) == v.pressed_render_frame
+                    || self.run_mode == ContextRunMode::Fixed
+                        && Some(self.fixed_tick) == v.pressed_fixed_tick
+            })
+            .unwrap_or(false)
+    }
+    pub fn is_key_just_released(&self, key: impl Into<Key>) -> bool {
+        self.key_info
+            .get(&key.into())
+            .map(|v| {
+                self.run_mode == ContextRunMode::Render
+                    && Some(self.render_frame) == v.released_render_frame
+                    || self.run_mode == ContextRunMode::Fixed
+                        && Some(self.fixed_tick) == v.released_fixed_tick
+            })
+            .unwrap_or(false)
+    }
 
     pub fn load_texture_rgba(
         &mut self,
@@ -306,7 +383,9 @@ impl Context {
     }
 
     pub(crate) fn render(&self) {
-        let output = self.gpu_data.surface.get_current_texture().unwrap();
+        let Ok(output) = self.gpu_data.surface.get_current_texture() else {
+            return;
+        };
         let output_view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

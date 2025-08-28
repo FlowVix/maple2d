@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use glam::vec2;
 use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
@@ -11,7 +11,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
-use crate::context::{CanvasContext, Context};
+use crate::context::{CanvasContext, Context, ContextRunMode, Key, KeyInfo};
 use crate::render::GPUData;
 use crate::state::AppState;
 
@@ -50,6 +50,10 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             passes: vec![],
             vertices: vec![],
             buffer_cache: AHashMap::new(),
+            render_frame: 0,
+            fixed_tick: 0,
+            key_info: AHashMap::new(),
+            run_mode: ContextRunMode::None,
         };
         let main_canvas =
             ctx.create_canvas_inner(window.inner_size().width, window.inner_size().height, true);
@@ -67,9 +71,6 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         let Some(data) = &mut self.data else {
             return;
         };
-        if data.state.window_event(&event, &mut data.ctx) {
-            return;
-        }
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -85,18 +86,53 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
 
                 data.ctx.reset();
 
+                data.ctx.run_mode = ContextRunMode::Render;
                 CanvasContext {
                     inner: &mut data.ctx,
                 }
                 .draw_canvas(data.main_canvas, |canvas| {
                     data.state.draw(canvas);
                 });
+                data.ctx.run_mode = ContextRunMode::None;
+                data.ctx.render_frame += 1;
 
                 data.ctx.render();
 
                 data.ctx.window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                if !event.repeat {
+                    let k1 = Key::Physical(event.physical_key);
+                    let k2 = Key::Logical(event.logical_key.clone());
+                    if event.state.is_pressed() {
+                        for k in [k1, k2] {
+                            let info = data.ctx.key_info.entry(k).or_insert(KeyInfo {
+                                pressed: false,
+                                pressed_render_frame: None,
+                                released_render_frame: None,
+                                pressed_fixed_tick: None,
+                                released_fixed_tick: None,
+                            });
+                            info.pressed = true;
+                            info.pressed_render_frame = Some(data.ctx.render_frame);
+                            info.pressed_fixed_tick = Some(data.ctx.fixed_tick);
+                        }
+                    } else {
+                        for k in [k1, k2] {
+                            let info = data.ctx.key_info.entry(k).or_insert(KeyInfo {
+                                pressed: false,
+                                pressed_render_frame: None,
+                                released_render_frame: None,
+                                pressed_fixed_tick: None,
+                                released_fixed_tick: None,
+                            });
+                            info.pressed = false;
+                            info.released_render_frame = Some(data.ctx.render_frame);
+                            info.released_fixed_tick = Some(data.ctx.fixed_tick);
+                        }
+                    }
+                }
+
                 data.state.key_event(event, &mut data.ctx);
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -119,10 +155,6 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         let Some(data) = &mut self.data else {
             return;
         };
-        if data.state.device_event(&event, &mut data.ctx) {
-            #[allow(clippy::needless_return)]
-            return;
-        }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: CustomEvent) {
@@ -131,7 +163,11 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         };
         match event {
             CustomEvent::FixedUpdate => {
+                data.ctx.run_mode = ContextRunMode::Fixed;
                 data.state.fixed_update(&mut data.ctx);
+                data.ctx.run_mode = ContextRunMode::None;
+
+                data.ctx.fixed_tick += 1;
             }
         }
     }
