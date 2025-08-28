@@ -71,7 +71,6 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         }
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::Resized(to) => {

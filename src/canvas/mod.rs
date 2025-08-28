@@ -62,16 +62,18 @@ impl<'a> Canvas<'a> {
     }
 
     pub fn set_texture(&mut self, tex: TextureKey) {
-        self.ctx
-            .inner
-            .passes
-            .last_mut()
-            .unwrap()
-            .calls
-            .push(DrawCall {
-                start_vertex: self.ctx.inner.vertices.len() as u32,
-                set_texture: Some(tex),
-            });
+        if Some(tex) != self.current_texture() {
+            self.ctx
+                .inner
+                .passes
+                .last_mut()
+                .unwrap()
+                .calls
+                .push(DrawCall {
+                    start_vertex: self.ctx.inner.vertices.len() as u32,
+                    set_texture: Some(tex),
+                });
+        }
     }
     pub fn current_texture(&mut self) -> Option<TextureKey> {
         self.ctx
