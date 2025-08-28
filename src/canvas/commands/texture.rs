@@ -81,7 +81,7 @@ impl<'a, 'r> TextureBuilder<'a, 'r> {
         let [tex_width, tex_height] = self
             .canvas
             .current_texture()
-            .map(|v| [v.width, v.height])
+            .map(|v| self.canvas.ctx.texture_dimensions(v).to_array())
             .unwrap_or([2, 2]);
 
         let width = match self.w {

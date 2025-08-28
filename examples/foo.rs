@@ -1,11 +1,11 @@
 use glam::vec2;
 use image::ImageReader;
 use itertools::Itertools;
-use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureInfo, run_app};
+use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureKey, run_app};
 
 struct State {
     v: f32,
-    tex: TextureInfo,
+    tex: TextureKey,
 }
 
 impl AppState for State {

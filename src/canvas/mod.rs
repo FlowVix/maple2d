@@ -7,7 +7,6 @@ use itertools::Itertools;
 use slotmap::new_key_type;
 
 use crate::{
-    TextureInfo,
     canvas::{
         color::Color,
         commands::{
@@ -15,7 +14,7 @@ use crate::{
             triangle::TriangleBuilder,
         },
     },
-    context::{Context, DrawCall},
+    context::{Context, DrawCall, texture::TextureKey},
     render::shaders::wgsl_common,
 };
 
@@ -62,13 +61,13 @@ impl<'a> Canvas<'a> {
         self.key
     }
 
-    pub fn set_texture(&mut self, tex: TextureInfo) {
+    pub fn set_texture(&mut self, tex: TextureKey) {
         self.ctx.passes.last_mut().unwrap().calls.push(DrawCall {
             start_vertex: self.ctx.vertices.len() as u32,
             set_texture: Some(tex),
         });
     }
-    pub fn current_texture(&mut self) -> Option<TextureInfo> {
+    pub fn current_texture(&mut self) -> Option<TextureKey> {
         self.ctx
             .passes
             .last()

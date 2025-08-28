@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use glam::{UVec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
 use wgpu::util::DeviceExt;
@@ -14,7 +15,7 @@ use winit::window::Window;
 
 use crate::{
     canvas::{Canvas, CanvasKey},
-    context::texture::{LoadedTexture, TextureFilter, TextureInfo, TextureKey, TextureMap},
+    context::texture::{LoadedTexture, TextureFilter, TextureKey, TextureMap},
     render::{
         GPUData, SAMPLE_COUNT,
         shaders::{wgsl_common, wgsl_draw},
@@ -52,7 +53,7 @@ pub struct RenderPass {
 pub struct DrawCall {
     pub(crate) start_vertex: u32,
     // pub set_blend_mode: Option<BlendMode>,
-    pub(crate) set_texture: Option<TextureInfo>,
+    pub(crate) set_texture: Option<TextureKey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -219,7 +220,7 @@ impl Context {
         width: u32,
         height: u32,
         filter: TextureFilter,
-    ) -> TextureInfo {
+    ) -> TextureKey {
         let texture = TextureBundle::from_rgba(
             &self.gpu_data.device,
             &self.gpu_data.queue,
@@ -241,17 +242,16 @@ impl Context {
                 },
             ),
         );
-        let key = self.loaded_textures.insert(LoadedTexture {
+        self.loaded_textures.insert(LoadedTexture {
             texture,
             bind_group,
-        });
-        TextureInfo { key, width, height }
+        })
     }
     pub fn load_texture_path<P: AsRef<Path>>(
         &mut self,
         path: P,
         filter: TextureFilter,
-    ) -> Result<TextureInfo, TexturePathLoadError> {
+    ) -> Result<TextureKey, TexturePathLoadError> {
         let img = ImageReader::open(path)
             .map_err(|_| TexturePathLoadError::FileNotFound)?
             .decode()
@@ -262,7 +262,7 @@ impl Context {
         &mut self,
         bytes: &[u8],
         filter: TextureFilter,
-    ) -> Result<TextureInfo, TextureBytesLoadError> {
+    ) -> Result<TextureKey, TextureBytesLoadError> {
         let img = ImageReader::new(Cursor::new(bytes))
             .with_guessed_format()
             .map_err(TextureBytesLoadError::IoError)?
@@ -270,9 +270,12 @@ impl Context {
             .map_err(|_| TextureBytesLoadError::DecodeError)?;
         Ok(self.load_texture_rgba(&img.to_rgba8(), img.width(), img.height(), filter))
     }
-
-    pub fn remove_texture(&mut self, texture: TextureInfo) {
-        self.loaded_textures.remove(texture.key);
+    pub fn remove_texture(&mut self, texture: TextureKey) {
+        self.loaded_textures.remove(texture);
+    }
+    pub fn texture_dimensions(&self, texture: TextureKey) -> UVec2 {
+        let t = &self.loaded_textures[texture].texture.texture;
+        uvec2(t.width(), t.height())
     }
 
     pub(crate) fn render(&self) {
@@ -367,7 +370,7 @@ impl Context {
                         if let Some(tex) = call.set_texture {
                             render_pass.set_bind_group(
                                 1,
-                                self.loaded_textures[tex.key].bind_group.get_bind_group(),
+                                self.loaded_textures[tex].bind_group.get_bind_group(),
                                 &[],
                             );
                         }
