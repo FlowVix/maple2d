@@ -82,7 +82,6 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             WindowEvent::RedrawRequested => {
                 let elapsed = data.last.elapsed().as_secs_f64();
                 data.last = Instant::now();
-                println!("fps: {}", 1.0 / elapsed);
 
                 data.ctx.reset();
 
