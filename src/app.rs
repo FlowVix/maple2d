@@ -1,7 +1,9 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ahash::AHashMap;
+use glam::vec2;
 use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -42,6 +44,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             gpu_data,
             canvas_datas: SlotMap::default(),
             loaded_textures: SlotMap::default(),
+            mouse_pos: vec2(0.0, 0.0),
             current_canvas: None,
             passes: vec![],
             vertices: vec![],
@@ -63,6 +66,9 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         let Some(data) = &mut self.data else {
             return;
         };
+        if data.state.window_event(&event, &mut data.ctx) {
+            return;
+        }
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
@@ -91,7 +97,32 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
 
                 data.ctx.window.request_redraw();
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                data.state.key_event(event, &mut data.ctx);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                data.ctx.mouse_pos = vec2(position.x as f32, position.y as f32);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                data.state
+                    .mouse_input(button, state.is_pressed(), &mut data.ctx);
+            }
             _ => (),
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        let Some(data) = &mut self.data else {
+            return;
+        };
+        if data.state.device_event(&event, &mut data.ctx) {
+            #[allow(clippy::needless_return)]
+            return;
         }
     }
 

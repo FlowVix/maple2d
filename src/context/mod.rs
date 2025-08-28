@@ -1,7 +1,7 @@
 pub mod texture;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{self, Cursor},
     mem::offset_of,
     ops::{Deref, DerefMut},
@@ -10,7 +10,7 @@ use std::{
 };
 
 use ahash::AHashMap;
-use glam::{UVec2, uvec2};
+use glam::{UVec2, Vec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
 use wgpu::util::DeviceExt;
@@ -33,6 +33,8 @@ pub struct Context {
     pub(crate) canvas_datas: SlotMap<CanvasKey, CanvasData>,
 
     pub(crate) loaded_textures: TextureMap,
+
+    pub(crate) mouse_pos: Vec2,
 
     pub(crate) current_canvas: Option<CanvasKey>,
 
@@ -229,6 +231,9 @@ impl Context {
 
     pub fn window(&self) -> &Window {
         &self.window
+    }
+    pub fn mouse_pos(&self) -> Vec2 {
+        self.mouse_pos
     }
 
     pub fn load_texture_rgba(
