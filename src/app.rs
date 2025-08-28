@@ -1,6 +1,7 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use ahash::AHashMap;
 use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -8,7 +9,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
 use crate::CanvasKey;
-use crate::context::Context;
+use crate::context::{CanvasContext, Context};
 use crate::render::GPUData;
 use crate::state::AppState;
 
@@ -23,7 +24,11 @@ struct App<S> {
     data: Option<AppData<S>>,
 }
 
-impl<S: AppState> ApplicationHandler for App<S> {
+enum CustomEvent {
+    FixedUpdate,
+}
+
+impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
@@ -40,6 +45,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
             current_canvas: None,
             passes: vec![],
             vertices: vec![],
+            buffer_cache: AHashMap::new(),
         };
         let main_canvas =
             ctx.create_canvas_inner(window.inner_size().width, window.inner_size().height, true);
@@ -72,10 +78,12 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 data.last = Instant::now();
                 println!("fps: {}", 1.0 / elapsed);
 
-                data.ctx.passes.clear();
-                data.ctx.vertices.clear();
+                data.ctx.reset();
 
-                data.ctx.draw_canvas(data.main_canvas, |canvas| {
+                CanvasContext {
+                    inner: &mut data.ctx,
+                }
+                .draw_canvas(data.main_canvas, |canvas| {
                     data.state.draw(canvas);
                 });
 
@@ -86,12 +94,33 @@ impl<S: AppState> ApplicationHandler for App<S> {
             _ => (),
         }
     }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: CustomEvent) {
+        let Some(data) = &mut self.data else {
+            return;
+        };
+        match event {
+            CustomEvent::FixedUpdate => {
+                data.state.fixed_update(&mut data.ctx);
+            }
+        }
+    }
 }
 
-pub fn run_app<S: AppState>() {
-    let event_loop = EventLoop::new().unwrap();
+pub fn run_app<S: AppState>(fixed_update_rate: u32) {
+    let event_loop = EventLoop::with_user_event().build().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
+
+    let proxy = event_loop.create_proxy();
+    std::thread::spawn(move || {
+        loop {
+            let Ok(_) = proxy.send_event(CustomEvent::FixedUpdate) else {
+                break;
+            };
+            spin_sleep::sleep(Duration::from_secs_f64(1.0 / fixed_update_rate as f64));
+        }
+    });
 
     let mut app = App::<S> { data: None };
     event_loop.run_app(&mut app).unwrap();

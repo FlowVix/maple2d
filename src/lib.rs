@@ -12,14 +12,15 @@ pub use canvas::{
     Canvas, CanvasKey,
     color::Color,
     commands::{
-        ellipse::EllipseBuilder, rect::RectBuilder, texture::TextureBuilder,
+        ellipse::EllipseBuilder, rect::RectBuilder, text::TextBuilder, texture::TextureBuilder,
         triangle::TriangleBuilder,
     },
 };
 pub use context::{
-    Context, TextureBytesLoadError, TexturePathLoadError,
+    CanvasContext, Context, TextureBytesLoadError, TexturePathLoadError,
     texture::{TextureFilter, TextureKey},
 };
 pub use state::AppState;
 
 pub use glam;
+pub use winit;

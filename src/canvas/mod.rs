@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Affine2, Vec2, vec2};
+use glam::{Affine2, Mat2, Vec2, vec2};
 
 use itertools::Itertools;
 
@@ -10,11 +10,11 @@ use crate::{
     canvas::{
         color::Color,
         commands::{
-            ellipse::EllipseBuilder, rect::RectBuilder, texture::TextureBuilder,
+            ellipse::EllipseBuilder, rect::RectBuilder, text::TextBuilder, texture::TextureBuilder,
             triangle::TriangleBuilder,
         },
     },
-    context::{Context, DrawCall, texture::TextureKey},
+    context::{CanvasContext, Context, DrawCall, texture::TextureKey},
     render::shaders::wgsl_common,
 };
 
@@ -27,7 +27,7 @@ new_key_type! {
 
 pub struct Canvas<'a> {
     pub(crate) key: CanvasKey,
-    pub(crate) ctx: &'a mut Context,
+    pub(crate) ctx: CanvasContext<'a>,
 
     pub fill_color: Color,
     pub stroke_color: Color,
@@ -41,7 +41,7 @@ pub struct Canvas<'a> {
     pub transform: Affine2,
 }
 impl<'a> Canvas<'a> {
-    pub(crate) fn new(key: CanvasKey, ctx: &'a mut Context) -> Self {
+    pub(crate) fn new(key: CanvasKey, ctx: CanvasContext<'a>) -> Self {
         Self {
             key,
             ctx,
@@ -54,18 +54,24 @@ impl<'a> Canvas<'a> {
             transform: Affine2::IDENTITY,
         }
     }
-    pub fn ctx(&mut self) -> &mut Context {
-        self.ctx
+    pub fn ctx(&mut self) -> &mut CanvasContext<'a> {
+        &mut self.ctx
     }
     pub fn key(&self) -> CanvasKey {
         self.key
     }
 
     pub fn set_texture(&mut self, tex: TextureKey) {
-        self.ctx.passes.last_mut().unwrap().calls.push(DrawCall {
-            start_vertex: self.ctx.vertices.len() as u32,
-            set_texture: Some(tex),
-        });
+        self.ctx
+            .inner
+            .passes
+            .last_mut()
+            .unwrap()
+            .calls
+            .push(DrawCall {
+                start_vertex: self.ctx.inner.vertices.len() as u32,
+                set_texture: Some(tex),
+            });
     }
     pub fn current_texture(&mut self) -> Option<TextureKey> {
         self.ctx
@@ -78,9 +84,31 @@ impl<'a> Canvas<'a> {
             .set_texture
     }
 
-    pub(crate) fn push_vertex(&mut self, v: wgsl_common::structs::VertexInput) {
-        self.ctx.vertices.push(v);
+    pub fn add_transform(&mut self, transform: Affine2) {
+        self.transform *= transform;
     }
+    pub fn translate(&mut self, x: f32, y: f32) {
+        self.add_transform(Affine2::from_translation(vec2(x, y)));
+    }
+    pub fn rotate(&mut self, angle: f32) {
+        self.add_transform(Affine2::from_angle(angle));
+    }
+    pub fn rotate_xy(&mut self, x: f32, y: f32) {
+        self.add_transform(Affine2::from_mat2(Mat2::from_cols(
+            vec2(x.cos(), x.sin()),
+            vec2(-y.sin(), y.cos()),
+        )));
+    }
+    pub fn scale(&mut self, x: f32, y: f32) {
+        self.add_transform(Affine2::from_scale(vec2(x, y)));
+    }
+    pub fn skew(&mut self, x: f32, y: f32) {
+        self.add_transform(Affine2::from_mat2(Mat2::from_cols(
+            vec2(1.0, y),
+            vec2(x, 1.0),
+        )));
+    }
+
     pub fn raw_tri(
         &mut self,
         a: Vec2,
@@ -96,24 +124,30 @@ impl<'a> Canvas<'a> {
         text_uv_b: Vec2,
         text_uv_c: Vec2,
     ) {
-        self.push_vertex(wgsl_common::structs::VertexInput::new(
-            a.to_array(),
-            color_a.to_array(),
-            uv_a.to_array(),
-            text_uv_a.to_array(),
-        ));
-        self.push_vertex(wgsl_common::structs::VertexInput::new(
-            b.to_array(),
-            color_b.to_array(),
-            uv_b.to_array(),
-            text_uv_b.to_array(),
-        ));
-        self.push_vertex(wgsl_common::structs::VertexInput::new(
-            c.to_array(),
-            color_c.to_array(),
-            uv_c.to_array(),
-            text_uv_c.to_array(),
-        ));
+        self.ctx
+            .vertices
+            .push(wgsl_common::structs::VertexInput::new(
+                self.transform.transform_point2(a).to_array(),
+                color_a.to_array(),
+                uv_a.to_array(),
+                text_uv_a.to_array(),
+            ));
+        self.ctx
+            .vertices
+            .push(wgsl_common::structs::VertexInput::new(
+                self.transform.transform_point2(b).to_array(),
+                color_b.to_array(),
+                uv_b.to_array(),
+                text_uv_b.to_array(),
+            ));
+        self.ctx
+            .vertices
+            .push(wgsl_common::structs::VertexInput::new(
+                self.transform.transform_point2(c).to_array(),
+                color_c.to_array(),
+                uv_c.to_array(),
+                text_uv_c.to_array(),
+            ));
     }
     pub(crate) fn draw_stroke(&mut self, points: impl ExactSizeIterator<Item = Vec2> + Clone) {
         let n_verts = points.len() as u32 * 2;
@@ -202,6 +236,22 @@ impl<'a> Canvas<'a> {
             centered: false,
             region: None,
             tint: false,
+        }
+    }
+    pub fn text<'r>(&'r mut self, string: &'r str) -> TextBuilder<'a, 'r> {
+        TextBuilder {
+            canvas: self,
+            text: string,
+            x: 0.0,
+            y: 0.0,
+            w: None,
+            h: None,
+            size: 16.0,
+            line_height: 1.3,
+            family: cosmic_text::Family::SansSerif,
+            weight: cosmic_text::Weight::NORMAL,
+            style: cosmic_text::Style::Normal,
+            stretch: cosmic_text::Stretch::Normal,
         }
     }
 }

@@ -4,10 +4,15 @@ use wgpu::util::DeviceExt;
 
 use crate::render::{
     shaders::{make_fragment_state, make_vertex_state, wgsl_common, wgsl_draw},
+    text::{
+        atlas::{GlyphAtlas, create_atlases_bind_group},
+        glyph::ContentType,
+    },
     texture::TextureBundle,
 };
 
 pub mod shaders;
+pub mod text;
 pub mod texture;
 
 pub const SAMPLE_COUNT: u32 = 4;
@@ -23,6 +28,13 @@ pub struct GPUData {
     pub(crate) draw_pipeline: wgpu::RenderPipeline,
 
     pub(crate) dummy_texture_bind: wgsl_draw::globals::BindGroup1,
+
+    pub(crate) font_system: cosmic_text::FontSystem,
+    pub(crate) swash_cache: cosmic_text::SwashCache,
+
+    pub(crate) mask_atlas: GlyphAtlas,
+    pub(crate) color_atlas: GlyphAtlas,
+    pub(crate) text_atlas_bind_group: wgsl_draw::globals::BindGroup2,
 }
 
 impl GPUData {
@@ -137,6 +149,10 @@ impl GPUData {
             ),
         );
 
+        let mask_atlas = GlyphAtlas::new(&device, ContentType::Mask);
+        let color_atlas = GlyphAtlas::new(&device, ContentType::Color);
+        let text_atlas_bind_group = create_atlases_bind_group(&device, &mask_atlas, &color_atlas);
+
         Self {
             surface,
             device,
@@ -145,6 +161,11 @@ impl GPUData {
             surface_config,
             draw_pipeline,
             dummy_texture_bind,
+            mask_atlas,
+            color_atlas,
+            text_atlas_bind_group,
+            font_system: cosmic_text::FontSystem::new(),
+            swash_cache: cosmic_text::SwashCache::new(),
         }
     }
     pub fn resize(&mut self, width: u32, height: u32) {

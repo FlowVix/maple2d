@@ -1,12 +1,15 @@
 pub mod texture;
 
 use std::{
+    collections::HashMap,
     io::{self, Cursor},
     mem::offset_of,
+    ops::{Deref, DerefMut},
     path::Path,
     sync::Arc,
 };
 
+use ahash::AHashMap;
 use glam::{UVec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
@@ -19,6 +22,7 @@ use crate::{
     render::{
         GPUData, SAMPLE_COUNT,
         shaders::{wgsl_common, wgsl_draw},
+        text::HashableMetrics,
         texture::TextureBundle,
     },
 };
@@ -34,6 +38,23 @@ pub struct Context {
 
     pub(crate) passes: Vec<RenderPass>,
     pub(crate) vertices: Vec<wgsl_common::structs::VertexInput>,
+
+    pub(crate) buffer_cache: AHashMap<BufferCacheKey, BufferCacheValue>,
+}
+pub struct CanvasContext<'a> {
+    pub(crate) inner: &'a mut Context,
+}
+impl<'a> Deref for CanvasContext<'a> {
+    type Target = Context;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner
+    }
+}
+impl<'a> DerefMut for CanvasContext<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner
+    }
 }
 
 pub struct CanvasData {
@@ -56,6 +77,18 @@ pub struct DrawCall {
     pub(crate) set_texture: Option<TextureKey>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BufferCacheKey {
+    pub(crate) metrics: HashableMetrics,
+    pub(crate) attrs: cosmic_text::AttrsOwned,
+    pub(crate) text: String,
+}
+#[derive(Debug, Clone)]
+pub struct BufferCacheValue {
+    pub(crate) buffer: cosmic_text::Buffer,
+    pub(crate) in_use: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TexturePathLoadError {
     FileNotFound,
@@ -68,6 +101,18 @@ pub enum TextureBytesLoadError {
 }
 
 impl Context {
+    pub(crate) fn reset(&mut self) {
+        self.passes.clear();
+        self.vertices.clear();
+
+        self.gpu_data.mask_atlas.clear_in_use();
+        self.gpu_data.color_atlas.clear_in_use();
+
+        self.buffer_cache.retain(|_, v| v.in_use);
+        for v in self.buffer_cache.values_mut() {
+            v.in_use = false;
+        }
+    }
     pub(crate) fn create_canvas_inner(
         &mut self,
         width: u32,
@@ -181,35 +226,7 @@ impl Context {
             bytemuck::bytes_of(&[width as f32, height as f32]),
         );
     }
-    pub fn draw_canvas<F>(&mut self, key: CanvasKey, cb: F)
-    where
-        F: FnOnce(&mut Canvas),
-    {
-        let prev = self.current_canvas;
-        self.current_canvas = Some(key);
-        self.passes.push(RenderPass {
-            target_canvas: key,
-            calls: vec![DrawCall {
-                start_vertex: self.vertices.len() as u32,
-                set_texture: None,
-            }],
-        });
 
-        let mut canvas = Canvas::new(key, self);
-
-        cb(&mut canvas);
-
-        if let Some(prev) = prev {
-            self.passes.push(RenderPass {
-                target_canvas: prev,
-                calls: vec![DrawCall {
-                    start_vertex: self.vertices.len() as u32,
-                    set_texture: None,
-                }],
-            });
-        }
-        self.current_canvas = prev;
-    }
     pub fn window(&self) -> &Window {
         &self.window
     }
@@ -351,7 +368,12 @@ impl Context {
                         self.gpu_data.dummy_texture_bind.get_bind_group(),
                         &[],
                     );
-                    // render_pass.set_bind_group(2, self.text_atlas_bind_group.get_bind_group(), &[]);
+                    render_pass.set_bind_group(
+                        2,
+                        self.gpu_data.text_atlas_bind_group.get_bind_group(),
+                        &[],
+                    );
+
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
 
                     for (idx, call) in pass.calls.iter().enumerate() {
@@ -382,5 +404,36 @@ impl Context {
 
         self.gpu_data.queue.submit([encoder.finish()]);
         output.present();
+    }
+}
+impl<'a> CanvasContext<'a> {
+    pub fn draw_canvas<F>(&mut self, key: CanvasKey, cb: F)
+    where
+        F: FnOnce(&mut Canvas),
+    {
+        let prev = self.inner.current_canvas;
+        self.inner.current_canvas = Some(key);
+        self.inner.passes.push(RenderPass {
+            target_canvas: key,
+            calls: vec![DrawCall {
+                start_vertex: self.inner.vertices.len() as u32,
+                set_texture: None,
+            }],
+        });
+
+        let mut canvas = Canvas::new(key, CanvasContext { inner: self.inner });
+
+        cb(&mut canvas);
+
+        if let Some(prev) = prev {
+            self.inner.passes.push(RenderPass {
+                target_canvas: prev,
+                calls: vec![DrawCall {
+                    start_vertex: self.inner.vertices.len() as u32,
+                    set_texture: None,
+                }],
+            });
+        }
+        self.current_canvas = prev;
     }
 }

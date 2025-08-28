@@ -1,11 +1,6 @@
 use std::f32::consts::PI;
 
 use glam::{Vec2, vec2};
-use i_overlay::mesh::{
-    stroke::offset::StrokeOffset,
-    style::{LineJoin, StrokeStyle},
-};
-use i_triangle::float::triangulatable::Triangulatable;
 use itertools::Itertools;
 
 use crate::Canvas;
