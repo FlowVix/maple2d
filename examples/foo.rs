@@ -8,6 +8,7 @@ use image::ImageReader;
 use itertools::Itertools;
 use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureKey, run_app};
 use winit::{
+    event::MouseButton,
     keyboard::{Key, KeyCode, PhysicalKey},
     window::Window,
 };
@@ -28,9 +29,8 @@ impl AppState for State {
     fn fixed_update(&mut self, ctx: &mut maple2d::Context) {}
 
     fn draw(&mut self, canvas: &mut maple2d::Canvas) {
-        if canvas.ctx().is_key_just_pressed(Key::Character("f")) {
-            println!("bla render");
-        }
+        canvas.set_texture(self.tex);
+        canvas.texture().draw();
     }
 }
 

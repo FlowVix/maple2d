@@ -30,7 +30,7 @@ fn vs_main_common(
 ) -> VertexOutput {
     var out: VertexOutput;
 
-    out.pos = vec4f(vertex.pos / GLOBALS.screen_size * 2.0, 0.0, 1.0);
+    out.pos = vec4f(vertex.pos / GLOBALS.screen_size * 2.0 * vec2f(1.0, -1.0) + vec2f(-1.0, 1.0), 0.0, 1.0);
     out.color = vertex.color;
     out.uv = uv;
     out.text_uv = vertex.text_uv;

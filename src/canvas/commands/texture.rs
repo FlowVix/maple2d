@@ -109,10 +109,10 @@ impl<'a, 'r> TextureBuilder<'a, 'r> {
             Some((pos, size)) => [pos.x, pos.x + size.x, pos.y, pos.y + size.y],
             None => [0.0, tex_width as f32, 0.0, tex_height as f32],
         };
-        let uv_a = vec2(uv_left, uv_bottom);
-        let uv_b = vec2(uv_right, uv_bottom);
-        let uv_c = vec2(uv_right, uv_top);
-        let uv_d = vec2(uv_left, uv_top);
+        let uv_a = vec2(uv_left, uv_top);
+        let uv_b = vec2(uv_right, uv_top);
+        let uv_c = vec2(uv_right, uv_bottom);
+        let uv_d = vec2(uv_left, uv_bottom);
 
         let color = if self.tint {
             self.canvas.fill_color
