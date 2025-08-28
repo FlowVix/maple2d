@@ -188,45 +188,47 @@ impl Context {
         self.canvas_datas.remove(key).is_some()
     }
     pub fn resize_canvas(&mut self, key: CanvasKey, width: u32, height: u32) {
-        self.canvas_datas[key].multisample_descriptor = wgpu::TextureDescriptor {
-            label: Some("multisample_descriptor"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: SAMPLE_COUNT,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.gpu_data.surface_config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        };
+        if width > 0 && height > 0 {
+            self.canvas_datas[key].multisample_descriptor = wgpu::TextureDescriptor {
+                label: Some("multisample_descriptor"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: SAMPLE_COUNT,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.gpu_data.surface_config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            };
 
-        self.canvas_datas[key].output_multisample_view = self
-            .gpu_data
-            .device
-            .create_texture(&self.canvas_datas[key].multisample_descriptor)
-            .create_view(&wgpu::TextureViewDescriptor::default());
+            self.canvas_datas[key].output_multisample_view = self
+                .gpu_data
+                .device
+                .create_texture(&self.canvas_datas[key].multisample_descriptor)
+                .create_view(&wgpu::TextureViewDescriptor::default());
 
-        if let Some(output) = &mut self.canvas_datas[key].output_texture {
-            *output = TextureBundle::blank(
-                &self.gpu_data.device,
-                width,
-                height,
-                self.gpu_data.surface_format,
-                wgpu::FilterMode::Linear,
-                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                1,
-                1,
+            if let Some(output) = &mut self.canvas_datas[key].output_texture {
+                *output = TextureBundle::blank(
+                    &self.gpu_data.device,
+                    width,
+                    height,
+                    self.gpu_data.surface_format,
+                    wgpu::FilterMode::Linear,
+                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    1,
+                    1,
+                );
+            }
+
+            self.gpu_data.queue.write_buffer(
+                &self.canvas_datas[key].globals_buffer,
+                offset_of!(wgsl_common::structs::CanvasGlobals, screen_size) as u64,
+                bytemuck::bytes_of(&[width as f32, height as f32]),
             );
         }
-
-        self.gpu_data.queue.write_buffer(
-            &self.canvas_datas[key].globals_buffer,
-            offset_of!(wgsl_common::structs::CanvasGlobals, screen_size) as u64,
-            bytemuck::bytes_of(&[width as f32, height as f32]),
-        );
     }
 
     pub fn window(&self) -> &Window {
