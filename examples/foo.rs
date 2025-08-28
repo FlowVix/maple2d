@@ -7,6 +7,7 @@ use glam::vec2;
 use image::ImageReader;
 use itertools::Itertools;
 use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureKey, run_app};
+use winit::window::Window;
 
 struct State {
     v: f32,
@@ -40,5 +41,5 @@ impl AppState for State {
 }
 
 fn main() {
-    run_app::<State>(60);
+    run_app::<State>(60, Window::default_attributes());
 }

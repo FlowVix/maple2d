@@ -8,7 +8,7 @@ use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
 use crate::context::{CanvasContext, Context};
@@ -23,6 +23,7 @@ struct AppData<S> {
 }
 
 struct App<S> {
+    attrs: Option<WindowAttributes>,
     data: Option<AppData<S>>,
 }
 
@@ -34,7 +35,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes())
+                .create_window(self.attrs.take().unwrap())
                 .unwrap(),
         );
 
@@ -136,7 +137,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
     }
 }
 
-pub fn run_app<S: AppState>(fixed_update_rate: u32) {
+pub fn run_app<S: AppState>(fixed_update_rate: u32, window_attributes: WindowAttributes) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -151,6 +152,9 @@ pub fn run_app<S: AppState>(fixed_update_rate: u32) {
         }
     });
 
-    let mut app = App::<S> { data: None };
+    let mut app = App::<S> {
+        data: None,
+        attrs: Some(window_attributes),
+    };
     event_loop.run_app(&mut app).unwrap();
 }
