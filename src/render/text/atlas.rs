@@ -35,7 +35,7 @@ impl GlyphAtlas {
             texture_size,
             texture_size,
             typ.texture_format(),
-            wgpu::FilterMode::Linear,
+            wgpu::FilterMode::Nearest,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             1,
             1,
