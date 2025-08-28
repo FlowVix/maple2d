@@ -14,7 +14,7 @@ use glam::{UVec2, Vec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
 use wgpu::util::DeviceExt;
-use winit::{keyboard::SmolStr, window::Window};
+use winit::{event::MouseButton, keyboard::SmolStr, window::Window};
 
 use crate::{
     canvas::{Canvas, CanvasKey},
@@ -46,7 +46,8 @@ pub struct Context {
 
     // input related
     pub(crate) mouse_pos: Vec2,
-    pub(crate) key_info: AHashMap<EitherKey, KeyInfo>,
+    pub(crate) key_info: AHashMap<EitherKey, PressInfo>,
+    pub(crate) mouse_button_info: AHashMap<MouseButton, PressInfo>,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -119,7 +120,7 @@ impl<S: Into<SmolStr>> From<winit::keyboard::Key<S>> for EitherKey {
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct KeyInfo {
+pub struct PressInfo {
     pub(crate) pressed: bool,
     pub(crate) pressed_render_frame: Option<u64>,
     pub(crate) released_render_frame: Option<u64>,
@@ -316,6 +317,40 @@ impl Context {
     pub fn is_key_just_released(&self, key: impl Into<EitherKey>) -> bool {
         self.key_info
             .get(&key.into())
+            .map(|v| {
+                self.run_mode == ContextRunMode::Render
+                    && Some(self.render_frame) == v.released_render_frame
+                    || self.run_mode == ContextRunMode::Fixed
+                        && Some(self.fixed_tick) == v.released_fixed_tick
+            })
+            .unwrap_or(false)
+    }
+    pub fn is_mouse_pressed(&self, button: MouseButton) -> bool {
+        self.mouse_button_info
+            .get(&button)
+            .map(|v| v.pressed)
+            .unwrap_or(false)
+    }
+    pub fn is_mouse_released(&self, button: MouseButton) -> bool {
+        self.mouse_button_info
+            .get(&button)
+            .map(|v| !v.pressed)
+            .unwrap_or(true)
+    }
+    pub fn is_mouse_just_pressed(&self, button: MouseButton) -> bool {
+        self.mouse_button_info
+            .get(&button)
+            .map(|v| {
+                self.run_mode == ContextRunMode::Render
+                    && Some(self.render_frame) == v.pressed_render_frame
+                    || self.run_mode == ContextRunMode::Fixed
+                        && Some(self.fixed_tick) == v.pressed_fixed_tick
+            })
+            .unwrap_or(false)
+    }
+    pub fn is_mouse_just_released(&self, button: MouseButton) -> bool {
+        self.mouse_button_info
+            .get(&button)
             .map(|v| {
                 self.run_mode == ContextRunMode::Render
                     && Some(self.render_frame) == v.released_render_frame

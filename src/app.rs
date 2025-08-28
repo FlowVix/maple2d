@@ -11,7 +11,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
-use crate::context::{CanvasContext, Context, ContextRunMode, EitherKey, KeyInfo};
+use crate::context::{CanvasContext, Context, ContextRunMode, EitherKey, PressInfo};
 use crate::render::GPUData;
 use crate::state::AppState;
 
@@ -53,6 +53,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             render_frame: 0,
             fixed_tick: 0,
             key_info: AHashMap::new(),
+            mouse_button_info: AHashMap::new(),
             run_mode: ContextRunMode::None,
         };
         let main_canvas =
@@ -106,7 +107,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                     let k2 = EitherKey::Logical(event.logical_key.clone());
                     if event.state.is_pressed() {
                         for k in [k1, k2] {
-                            let info = data.ctx.key_info.entry(k).or_insert(KeyInfo {
+                            let info = data.ctx.key_info.entry(k).or_insert(PressInfo {
                                 pressed: false,
                                 pressed_render_frame: None,
                                 released_render_frame: None,
@@ -119,7 +120,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                         }
                     } else {
                         for k in [k1, k2] {
-                            let info = data.ctx.key_info.entry(k).or_insert(KeyInfo {
+                            let info = data.ctx.key_info.entry(k).or_insert(PressInfo {
                                 pressed: false,
                                 pressed_render_frame: None,
                                 released_render_frame: None,
@@ -139,6 +140,38 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.ctx.mouse_pos = vec2(position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                if state.is_pressed() {
+                    let info = data
+                        .ctx
+                        .mouse_button_info
+                        .entry(button)
+                        .or_insert(PressInfo {
+                            pressed: false,
+                            pressed_render_frame: None,
+                            released_render_frame: None,
+                            pressed_fixed_tick: None,
+                            released_fixed_tick: None,
+                        });
+                    info.pressed = true;
+                    info.pressed_render_frame = Some(data.ctx.render_frame);
+                    info.pressed_fixed_tick = Some(data.ctx.fixed_tick);
+                } else {
+                    let info = data
+                        .ctx
+                        .mouse_button_info
+                        .entry(button)
+                        .or_insert(PressInfo {
+                            pressed: false,
+                            pressed_render_frame: None,
+                            released_render_frame: None,
+                            pressed_fixed_tick: None,
+                            released_fixed_tick: None,
+                        });
+                    info.pressed = false;
+                    info.released_render_frame = Some(data.ctx.render_frame);
+                    info.released_fixed_tick = Some(data.ctx.fixed_tick);
+                }
+
                 data.state
                     .mouse_input(button, state.is_pressed(), &mut data.ctx);
             }
