@@ -22,5 +22,6 @@ pub use context::{
 };
 pub use state::AppState;
 
+pub use cosmic_text;
 pub use glam;
 pub use winit;

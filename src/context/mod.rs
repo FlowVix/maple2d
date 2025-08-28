@@ -235,6 +235,9 @@ impl Context {
     pub fn mouse_pos(&self) -> Vec2 {
         self.mouse_pos
     }
+    pub fn font_system(&mut self) -> &mut cosmic_text::FontSystem {
+        &mut self.gpu_data.font_system
+    }
 
     pub fn load_texture_rgba(
         &mut self,
