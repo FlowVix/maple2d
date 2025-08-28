@@ -86,6 +86,9 @@ impl<'a> Canvas<'a> {
             .set_texture
     }
 
+    pub fn set_transform(&mut self, transform: Affine2) {
+        self.transform = transform;
+    }
     pub fn add_transform(&mut self, transform: Affine2) {
         self.transform *= transform;
     }
