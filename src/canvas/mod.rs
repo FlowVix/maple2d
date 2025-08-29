@@ -257,6 +257,7 @@ impl<'a> Canvas<'a> {
             weight: cosmic_text::Weight::NORMAL,
             style: cosmic_text::Style::Normal,
             stretch: cosmic_text::Stretch::Normal,
+            align: cosmic_text::Align::Left,
         }
     }
 }

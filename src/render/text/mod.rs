@@ -38,6 +38,17 @@ pub fn find_closest_attrs<'a>(
     .family(family)
 }
 
+/// calculates the bounding width and height of a buffer
+pub fn text_buffer_dimensions(buffer: &cosmic_text::Buffer) -> [f32; 2] {
+    let mut max_w = 0.0;
+    let mut height = 0.0;
+    for run in buffer.layout_runs() {
+        max_w = run.line_w.max(max_w);
+        height = run.line_top + run.line_height;
+    }
+    [max_w, height]
+}
+
 #[derive(Debug, Clone)]
 pub struct HashableMetrics(pub cosmic_text::Metrics);
 impl PartialEq for HashableMetrics {
@@ -51,5 +62,12 @@ impl Hash for HashableMetrics {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.font_size.to_bits().hash(state);
         self.0.line_height.to_bits().hash(state);
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HashableAlign(pub cosmic_text::Align);
+impl Hash for HashableAlign {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(&self.0).hash(state);
     }
 }

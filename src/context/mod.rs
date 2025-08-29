@@ -22,7 +22,7 @@ use crate::{
     render::{
         GPUData, SAMPLE_COUNT,
         shaders::{wgsl_common, wgsl_draw},
-        text::HashableMetrics,
+        text::{HashableAlign, HashableMetrics},
         texture::TextureBundle,
     },
 };
@@ -89,6 +89,7 @@ pub struct DrawCall {
 pub struct BufferCacheKey {
     pub(crate) metrics: HashableMetrics,
     pub(crate) attrs: cosmic_text::AttrsOwned,
+    pub(crate) align: HashableAlign,
     pub(crate) text: String,
 }
 #[derive(Debug, Clone)]

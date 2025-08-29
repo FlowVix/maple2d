@@ -1,12 +1,16 @@
 use std::f32::consts::PI;
 
+use ahash::AHashMap;
 use glam::{Vec2, vec2};
 use itertools::Itertools;
 
 use crate::{
     Canvas, Color,
     context::{BufferCacheKey, BufferCacheValue},
-    render::text::{HashableMetrics, find_closest_attrs, glyph::prepare_glyph},
+    render::text::{
+        HashableAlign, HashableMetrics, find_closest_attrs, glyph::prepare_glyph,
+        text_buffer_dimensions,
+    },
 };
 
 #[must_use = "this command does nothing until you call `draw()`"]
@@ -23,6 +27,7 @@ pub struct TextBuilder<'a, 'r> {
     pub(crate) weight: cosmic_text::Weight,
     pub(crate) style: cosmic_text::Style,
     pub(crate) stretch: cosmic_text::Stretch,
+    pub(crate) align: cosmic_text::Align,
 }
 impl<'a, 'r> TextBuilder<'a, 'r> {
     #[inline]
@@ -95,53 +100,26 @@ impl<'a, 'r> TextBuilder<'a, 'r> {
         self.stretch = v;
         self
     }
+    #[inline]
+    pub fn align(mut self, v: cosmic_text::Align) -> Self {
+        self.align = v;
+        self
+    }
     pub fn draw(self) {
-        let metrics = cosmic_text::Metrics::relative(self.size, self.line_height);
-        let attrs = cosmic_text::AttrsOwned::new(&find_closest_attrs(
-            self.canvas.ctx.gpu_data.font_system.db(),
+        let v = get_and_shape_buffer(
+            &mut self.canvas.ctx.inner.gpu_data.font_system,
+            &mut self.canvas.ctx.inner.buffer_cache,
+            self.w,
+            self.h,
+            self.text,
+            self.size,
+            self.line_height,
             self.family,
             self.weight,
             self.style,
             self.stretch,
-        ));
-
-        let v = self
-            .canvas
-            .ctx
-            .inner
-            .buffer_cache
-            .entry(BufferCacheKey {
-                metrics: HashableMetrics(metrics),
-                attrs: attrs.clone(),
-                text: self.text.into(),
-            })
-            .or_insert_with(|| {
-                let mut buffer = cosmic_text::Buffer::new(
-                    &mut self.canvas.ctx.inner.gpu_data.font_system,
-                    metrics,
-                );
-
-                buffer.set_text(
-                    &mut self.canvas.ctx.inner.gpu_data.font_system,
-                    self.text,
-                    &attrs.as_attrs(),
-                    cosmic_text::Shaping::Advanced,
-                );
-
-                BufferCacheValue {
-                    buffer,
-                    in_use: true,
-                }
-            });
-        v.in_use = true;
-
-        v.buffer.set_size(
-            &mut self.canvas.ctx.inner.gpu_data.font_system,
-            self.w,
-            self.h,
+            self.align,
         );
-        v.buffer
-            .shape_until_scroll(&mut self.canvas.ctx.inner.gpu_data.font_system, true);
 
         for run in v.buffer.layout_runs() {
             for glyph in run.glyphs {
@@ -180,4 +158,77 @@ impl<'a, 'r> TextBuilder<'a, 'r> {
             }
         }
     }
+    pub fn measure(&mut self) -> Vec2 {
+        let v = get_and_shape_buffer(
+            &mut self.canvas.ctx.inner.gpu_data.font_system,
+            &mut self.canvas.ctx.inner.buffer_cache,
+            self.w,
+            self.h,
+            self.text,
+            self.size,
+            self.line_height,
+            self.family,
+            self.weight,
+            self.style,
+            self.stretch,
+            self.align,
+        );
+
+        Vec2::from_array(text_buffer_dimensions(&v.buffer))
+    }
+}
+
+// no view types so gotta do this
+pub fn get_and_shape_buffer<'a>(
+    font_system: &mut cosmic_text::FontSystem,
+    buffer_cache: &'a mut AHashMap<BufferCacheKey, BufferCacheValue>,
+    w: Option<f32>,
+    h: Option<f32>,
+    text: &'a str,
+    size: f32,
+    line_height: f32,
+    family: cosmic_text::Family<'a>,
+    weight: cosmic_text::Weight,
+    style: cosmic_text::Style,
+    stretch: cosmic_text::Stretch,
+    align: cosmic_text::Align,
+) -> &'a mut BufferCacheValue {
+    let metrics = cosmic_text::Metrics::relative(size, line_height);
+    let attrs = cosmic_text::AttrsOwned::new(&find_closest_attrs(
+        font_system.db(),
+        family,
+        weight,
+        style,
+        stretch,
+    ));
+
+    let v = buffer_cache
+        .entry(BufferCacheKey {
+            metrics: HashableMetrics(metrics),
+            attrs: attrs.clone(),
+            align: HashableAlign(align),
+            text: text.into(),
+        })
+        .or_insert_with(|| {
+            let mut buffer = cosmic_text::Buffer::new(font_system, metrics);
+
+            buffer.set_rich_text(
+                font_system,
+                [(text, attrs.as_attrs())],
+                &attrs.as_attrs(),
+                cosmic_text::Shaping::Advanced,
+                Some(align),
+            );
+
+            BufferCacheValue {
+                buffer,
+                in_use: true,
+            }
+        });
+    v.in_use = true;
+
+    v.buffer.set_size(font_system, w, h);
+    v.buffer.shape_until_scroll(font_system, true);
+
+    v
 }
