@@ -48,6 +48,7 @@ pub struct Context {
     pub(crate) mouse_pos: Vec2,
     pub(crate) key_info: AHashMap<EitherKey, PressInfo>,
     pub(crate) mouse_button_info: AHashMap<MouseButton, PressInfo>,
+    pub(crate) mouse_wheel_info: MouseWheelInfo,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -140,6 +141,12 @@ pub struct PressInfo {
     pub(crate) released_render_frame: Option<u64>,
     pub(crate) pressed_fixed_tick: Option<u64>,
     pub(crate) released_fixed_tick: Option<u64>,
+}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MouseWheelInfo {
+    pub(crate) delta: Vec2,
+    pub(crate) render_frame: Option<u64>,
+    pub(crate) fixed_tick: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -421,6 +428,17 @@ impl Context {
                         && Some(self.fixed_tick) == v.released_fixed_tick
             })
             .unwrap_or(false)
+    }
+    pub fn mouse_wheel_delta(&self) -> Vec2 {
+        if self.run_mode == ContextRunMode::Render
+            && Some(self.render_frame) == self.mouse_wheel_info.render_frame
+            || self.run_mode == ContextRunMode::Fixed
+                && Some(self.fixed_tick) == self.mouse_wheel_info.fixed_tick
+        {
+            self.mouse_wheel_info.delta
+        } else {
+            Vec2::ZERO
+        }
     }
 
     pub fn load_texture_rgba(

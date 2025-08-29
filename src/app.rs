@@ -3,15 +3,17 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ahash::{AHashMap, AHashSet};
-use glam::vec2;
+use glam::{Vec2, vec2};
 use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
-use crate::context::{CanvasContext, Context, ContextRunMode, EitherKey, PressInfo};
+use crate::context::{
+    CanvasContext, Context, ContextRunMode, EitherKey, MouseWheelInfo, PressInfo,
+};
 use crate::render::GPUData;
 use crate::state::AppState;
 
@@ -55,6 +57,11 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
             key_info: AHashMap::new(),
             mouse_button_info: AHashMap::new(),
             run_mode: ContextRunMode::None,
+            mouse_wheel_info: MouseWheelInfo {
+                delta: Vec2::ZERO,
+                render_frame: None,
+                fixed_tick: None,
+            },
         };
         let main_canvas =
             ctx.create_canvas_inner(window.inner_size().width, window.inner_size().height, true);
@@ -175,6 +182,14 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.state
                     .mouse_input(button, state.is_pressed(), &mut data.ctx);
             }
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                    data.ctx.mouse_wheel_info.delta = vec2(x, y);
+                    data.ctx.mouse_wheel_info.render_frame = Some(data.ctx.render_frame);
+                    data.ctx.mouse_wheel_info.fixed_tick = Some(data.ctx.fixed_tick);
+                }
+                _ => {}
+            },
             _ => (),
         }
     }
@@ -183,11 +198,14 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         &mut self,
         event_loop: &ActiveEventLoop,
         device_id: winit::event::DeviceId,
-        event: winit::event::DeviceEvent,
+        event: DeviceEvent,
     ) {
         let Some(data) = &mut self.data else {
             return;
         };
+        // match event {
+        //     DeviceEvent::
+        // }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: CustomEvent) {
