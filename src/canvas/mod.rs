@@ -30,6 +30,7 @@ pub struct Canvas<'a> {
     pub(crate) ctx: CanvasContext<'a>,
 
     pub(crate) current_texture: Option<TextureKey>,
+    pub(crate) stencil_reference: u32,
 
     pub fill_color: Color,
     pub stroke_color: Color,
@@ -48,6 +49,7 @@ impl<'a> Canvas<'a> {
             key,
             ctx,
             current_texture: None,
+            stencil_reference: 0,
             fill_color: Color::rgb(0.25, 0.25, 0.25),
             stroke_color: Color::rgb(0.75, 0.75, 0.75),
             stroke_weight: 2.0,
@@ -76,6 +78,8 @@ impl<'a> Canvas<'a> {
                     start_vertex: self.ctx.inner.vertices.len() as u32,
                     typ: DrawCallType::Draw {
                         set_texture: Some(tex),
+                        reference: self.stencil_reference,
+                        end_clip_reference: None,
                     },
                 });
             self.current_texture = Some(tex);
@@ -254,6 +258,61 @@ impl<'a> Canvas<'a> {
             stretch: cosmic_text::Stretch::Normal,
             align: cosmic_text::Align::Left,
         }
+    }
+
+    pub fn clipped<C: FnOnce(&mut Canvas), F: FnOnce(&mut Canvas)>(
+        &mut self,
+        clip_cb: C,
+        draw_cb: F,
+    ) {
+        self.ctx
+            .inner
+            .passes
+            .last_mut()
+            .unwrap()
+            .calls
+            .push(DrawCall {
+                start_vertex: self.ctx.inner.vertices.len() as u32,
+                typ: DrawCallType::ClipStart {
+                    reference: self.stencil_reference,
+                },
+            });
+        self.stencil_reference += 1;
+
+        clip_cb(self);
+
+        self.ctx
+            .inner
+            .passes
+            .last_mut()
+            .unwrap()
+            .calls
+            .push(DrawCall {
+                start_vertex: self.ctx.inner.vertices.len() as u32,
+                typ: DrawCallType::Draw {
+                    set_texture: None,
+                    reference: self.stencil_reference,
+                    end_clip_reference: None,
+                },
+            });
+
+        draw_cb(self);
+
+        self.ctx
+            .inner
+            .passes
+            .last_mut()
+            .unwrap()
+            .calls
+            .push(DrawCall {
+                start_vertex: self.ctx.inner.vertices.len() as u32,
+                typ: DrawCallType::Draw {
+                    set_texture: None,
+                    reference: self.stencil_reference - 1,
+                    end_clip_reference: Some(self.stencil_reference),
+                },
+            });
+        self.stencil_reference -= 1;
     }
 }
 

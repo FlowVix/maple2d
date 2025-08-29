@@ -3,7 +3,7 @@ use std::mem::offset_of;
 use wgpu::util::DeviceExt;
 
 use crate::render::{
-    shaders::{make_fragment_state, make_vertex_state, wgsl_common, wgsl_draw},
+    shaders::{make_fragment_state, make_vertex_state, wgsl_common, wgsl_draw, wgsl_stencil},
     text::{
         atlas::{GlyphAtlas, create_atlases_bind_group},
         glyph::ContentType,
@@ -25,6 +25,8 @@ pub struct GPUData {
     pub(crate) surface_format: wgpu::TextureFormat,
     pub(crate) surface_config: wgpu::SurfaceConfiguration,
 
+    pub(crate) start_clip_pipeline: wgpu::RenderPipeline,
+    pub(crate) end_clip_pipeline: wgpu::RenderPipeline,
     pub(crate) draw_pipeline: wgpu::RenderPipeline,
 
     pub(crate) dummy_texture_bind: wgsl_draw::globals::BindGroup1,
@@ -91,6 +93,150 @@ impl GPUData {
         };
         surface.configure(&device, &surface_config);
 
+        let start_clip_pipeline = {
+            let module = wgsl_stencil::create_shader_module(&device);
+
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("start_clip_pipeline"),
+                layout: Some(&wgsl_stencil::create_pipeline_layout(&device)),
+                vertex: make_vertex_state(
+                    &module,
+                    &wgsl_stencil::entries::vertex_entry_vs_main(wgpu::VertexStepMode::Vertex),
+                ),
+                fragment: Some(make_fragment_state(
+                    &module,
+                    &wgsl_stencil::entries::fragment_entry_fs_main(&[Some(
+                        wgpu::ColorTargetState {
+                            format: surface_config.format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::empty(),
+                        },
+                    )]),
+                )),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Cw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::IncrementClamp,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::IncrementClamp,
+                        },
+                        read_mask: 0xff,
+                        write_mask: 0xff,
+                    },
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: SAMPLE_COUNT,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            })
+        };
+        let end_clip_pipeline = {
+            let module = wgsl_stencil::create_shader_module(&device);
+
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("start_clip_pipeline"),
+                layout: Some(&wgsl_stencil::create_pipeline_layout(&device)),
+                vertex: make_vertex_state(
+                    &module,
+                    &wgsl_stencil::entries::vertex_entry_vs_main(wgpu::VertexStepMode::Vertex),
+                ),
+                fragment: Some(make_fragment_state(
+                    &module,
+                    &wgsl_stencil::entries::fragment_entry_fs_main(&[Some(
+                        wgpu::ColorTargetState {
+                            format: surface_config.format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::empty(),
+                        },
+                    )]),
+                )),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Cw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::DecrementClamp,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::DecrementClamp,
+                        },
+                        read_mask: 0xff,
+                        write_mask: 0xff,
+                    },
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: SAMPLE_COUNT,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            })
+        };
+
+        let draw_depth_stencil = Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            depth_write_enabled: false,
+            depth_compare: wgpu::CompareFunction::Always,
+            stencil: wgpu::StencilState {
+                front: wgpu::StencilFaceState {
+                    compare: wgpu::CompareFunction::Equal,
+                    fail_op: wgpu::StencilOperation::Keep,
+                    depth_fail_op: wgpu::StencilOperation::Keep,
+                    pass_op: wgpu::StencilOperation::Keep,
+                },
+                back: wgpu::StencilFaceState {
+                    compare: wgpu::CompareFunction::Equal,
+                    fail_op: wgpu::StencilOperation::Keep,
+                    depth_fail_op: wgpu::StencilOperation::Keep,
+                    pass_op: wgpu::StencilOperation::Keep,
+                },
+                read_mask: 0xff,
+                write_mask: 0x00,
+            },
+            bias: Default::default(),
+        });
+
         let draw_pipeline = {
             let module = wgsl_draw::create_shader_module(&device);
 
@@ -118,7 +264,7 @@ impl GPUData {
                     unclipped_depth: false,
                     conservative: false,
                 },
-                depth_stencil: None,
+                depth_stencil: draw_depth_stencil,
                 multisample: wgpu::MultisampleState {
                     count: SAMPLE_COUNT,
                     mask: !0,
@@ -159,6 +305,8 @@ impl GPUData {
             queue,
             surface_format,
             surface_config,
+            start_clip_pipeline,
+            end_clip_pipeline,
             draw_pipeline,
             dummy_texture_bind,
             mask_atlas,

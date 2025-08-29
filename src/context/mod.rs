@@ -68,6 +68,9 @@ impl<'a> DerefMut for CanvasContext<'a> {
 pub struct CanvasData {
     pub(crate) multisample_descriptor: wgpu::TextureDescriptor<'static>,
     pub(crate) output_multisample_view: wgpu::TextureView,
+    pub(crate) depth_stencil_descriptor: wgpu::TextureDescriptor<'static>,
+    pub(crate) depth_stencil_view: wgpu::TextureView,
+
     pub(crate) output_texture: Option<TextureBundle>,
 
     pub(crate) globals_buffer: wgpu::Buffer,
@@ -83,11 +86,10 @@ pub enum DrawCallType {
     Draw {
         // pub set_blend_mode: Option<BlendMode>,
         set_texture: Option<TextureKey>,
+        reference: u32,
+        end_clip_reference: Option<u32>,
     },
     ClipStart {
-        reference: u32,
-    },
-    ClipEnd {
         reference: u32,
     },
 }
@@ -159,9 +161,17 @@ pub enum TextureBytesLoadError {
 }
 
 impl Context {
-    pub(crate) fn reset(&mut self) {
+    pub(crate) fn reset_draw(&mut self) {
         self.passes.clear();
         self.vertices.clear();
+        self.vertices.extend(
+            [
+                [0.0, 0.0],
+                [self.gpu_data.surface_config.width as f32 * 2.0, 0.0],
+                [0.0, self.gpu_data.surface_config.height as f32 * 2.0],
+            ]
+            .map(|pos| wgsl_common::structs::VertexInput::new(pos, [1.0; 4], [-1.0; 2], [-1.0; 2])),
+        );
 
         self.gpu_data.mask_atlas.clear_in_use();
         self.gpu_data.color_atlas.clear_in_use();
@@ -217,10 +227,31 @@ impl Context {
             .device
             .create_texture(&multisample_descriptor)
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_stencil_descriptor = wgpu::TextureDescriptor {
+            label: Some("Depth Stencil Descriptor"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: SAMPLE_COUNT,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[wgpu::TextureFormat::Depth24PlusStencil8],
+        };
+        let depth_stencil_view = self
+            .gpu_data
+            .device
+            .create_texture(&depth_stencil_descriptor)
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         self.canvas_datas.insert(CanvasData {
             multisample_descriptor,
             output_multisample_view,
+            depth_stencil_descriptor,
+            depth_stencil_view,
             output_texture: (!screen).then(|| {
                 TextureBundle::blank(
                     &self.gpu_data.device,
@@ -264,6 +295,26 @@ impl Context {
                 .gpu_data
                 .device
                 .create_texture(&self.canvas_datas[key].multisample_descriptor)
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            self.canvas_datas[key].depth_stencil_descriptor = wgpu::TextureDescriptor {
+                label: Some("Depth Stencil Descriptor"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: SAMPLE_COUNT,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[wgpu::TextureFormat::Depth24PlusStencil8],
+            };
+            self.canvas_datas[key].depth_stencil_view = self
+                .gpu_data
+                .device
+                .create_texture(&self.canvas_datas[key].depth_stencil_descriptor)
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             if let Some(output) = &mut self.canvas_datas[key].output_texture {
@@ -492,13 +543,19 @@ impl Context {
                             },
                             depth_slice: None,
                         })],
-                        depth_stencil_attachment: None,
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.canvas_datas[pass.target_canvas].depth_stencil_view,
+                            depth_ops: None,
+                            stencil_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            }),
+                        }),
                         occlusion_query_set: None,
                         timestamp_writes: None,
                     };
                     let mut render_pass = encoder.begin_render_pass(&pass_desc);
 
-                    render_pass.set_pipeline(&self.gpu_data.draw_pipeline);
                     render_pass.set_bind_group(
                         0,
                         self.canvas_datas[pass.target_canvas]
@@ -527,7 +584,16 @@ impl Context {
                             .unwrap_or(render_pass_end_vertex);
 
                         match call.typ {
-                            DrawCallType::Draw { set_texture } => {
+                            DrawCallType::Draw {
+                                set_texture,
+                                reference,
+                                end_clip_reference,
+                            } => {
+                                if let Some(end_reference) = end_clip_reference {
+                                    render_pass.set_pipeline(&self.gpu_data.end_clip_pipeline);
+                                    render_pass.set_stencil_reference(end_reference);
+                                    render_pass.draw(0..3, 0..1);
+                                }
                                 // if let Some(mode) = call.set_blend_mode {
                                 //     render_pass.set_pipeline(match mode {
                                 //         BlendMode::Normal => &self.normal_pipeline,
@@ -541,10 +607,15 @@ impl Context {
                                         &[],
                                     );
                                 }
+                                render_pass.set_pipeline(&self.gpu_data.draw_pipeline);
+                                render_pass.set_stencil_reference(reference);
                                 render_pass.draw(call.start_vertex..call_end_vertex, 0..1);
                             }
-                            DrawCallType::ClipStart { reference } => todo!(),
-                            DrawCallType::ClipEnd { reference } => todo!(),
+                            DrawCallType::ClipStart { reference } => {
+                                render_pass.set_pipeline(&self.gpu_data.start_clip_pipeline);
+                                render_pass.set_stencil_reference(reference);
+                                render_pass.draw(call.start_vertex..call_end_vertex, 0..1);
+                            }
                         }
                     }
                 }
@@ -560,13 +631,27 @@ impl<'a> CanvasContext<'a> {
     where
         F: FnOnce(&mut Canvas),
     {
-        let prev = self.inner.current_canvas;
+        let prev = self.inner.current_canvas.map(|canvas| {
+            (canvas, {
+                let DrawCallType::Draw { reference, .. } =
+                    self.inner.passes.last().unwrap().calls.last().unwrap().typ
+                else {
+                    panic!("started sub-canvas draw during clip draw")
+                };
+                reference
+            })
+        });
+
         self.inner.current_canvas = Some(key);
         self.inner.passes.push(RenderPass {
             target_canvas: key,
             calls: vec![DrawCall {
                 start_vertex: self.inner.vertices.len() as u32,
-                typ: DrawCallType::Draw { set_texture: None },
+                typ: DrawCallType::Draw {
+                    set_texture: None,
+                    reference: 0,
+                    end_clip_reference: None,
+                },
             }],
         });
 
@@ -574,15 +659,19 @@ impl<'a> CanvasContext<'a> {
 
         cb(&mut canvas);
 
-        if let Some(prev) = prev {
+        if let Some((prev_canvas, prev_reference)) = prev {
             self.inner.passes.push(RenderPass {
-                target_canvas: prev,
+                target_canvas: prev_canvas,
                 calls: vec![DrawCall {
                     start_vertex: self.inner.vertices.len() as u32,
-                    typ: DrawCallType::Draw { set_texture: None },
+                    typ: DrawCallType::Draw {
+                        set_texture: None,
+                        reference: prev_reference,
+                        end_clip_reference: None,
+                    },
                 }],
             });
         }
-        self.current_canvas = prev;
+        self.current_canvas = prev.map(|v| v.0);
     }
 }

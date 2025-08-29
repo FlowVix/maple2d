@@ -85,7 +85,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 let elapsed = data.last.elapsed().as_secs_f64();
                 data.last = Instant::now();
 
-                data.ctx.reset();
+                data.ctx.reset_draw();
 
                 data.ctx.run_mode = ContextRunMode::Render;
                 CanvasContext {
