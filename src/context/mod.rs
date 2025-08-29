@@ -1,6 +1,7 @@
 pub mod texture;
 
 use std::{
+    any::{Any, TypeId},
     collections::{HashMap, HashSet},
     io::{self, Cursor},
     mem::offset_of,
@@ -49,6 +50,9 @@ pub struct Context {
     pub(crate) key_info: AHashMap<EitherKey, PressInfo>,
     pub(crate) mouse_button_info: AHashMap<MouseButton, PressInfo>,
     pub(crate) mouse_wheel_info: MouseWheelInfo,
+
+    // state related
+    pub(crate) temp_states: AHashMap<(SmolStr, TypeId), Box<dyn Any>>,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -503,6 +507,20 @@ impl Context {
     pub fn texture_dimensions(&self, texture: TextureKey) -> UVec2 {
         let t = &self.loaded_textures[texture].texture.texture;
         uvec2(t.width(), t.height())
+    }
+
+    pub fn state<T: 'static, F: FnOnce() -> T>(
+        &mut self,
+        key: impl Into<SmolStr>,
+        default: F,
+    ) -> &mut T {
+        let key = key.into();
+        let t = TypeId::of::<T>();
+        self.temp_states
+            .entry((key, t))
+            .or_insert_with(|| Box::new(default()))
+            .downcast_mut()
+            .unwrap()
     }
 
     pub(crate) fn render(&self) {

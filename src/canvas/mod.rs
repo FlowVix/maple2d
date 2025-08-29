@@ -314,6 +314,29 @@ impl<'a> Canvas<'a> {
             });
         self.stencil_reference -= 1;
     }
+
+    pub fn clear(&mut self) {
+        self.raw_tri(
+            vec2(0.0, 0.0),
+            vec2(
+                self.ctx.inner.gpu_data.surface_config.width as f32 * 2.0,
+                0.0,
+            ),
+            vec2(
+                0.0,
+                self.ctx.inner.gpu_data.surface_config.height as f32 * 2.0,
+            ),
+            self.fill_color,
+            self.fill_color,
+            self.fill_color,
+            vec2(-1.0, 0.0),
+            vec2(-1.0, 0.0),
+            vec2(-1.0, 0.0),
+            vec2(-1.0, 0.0),
+            vec2(-1.0, 0.0),
+            vec2(-1.0, 0.0),
+        );
+    }
 }
 
 // #[bon::bon]

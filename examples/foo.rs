@@ -29,17 +29,18 @@ impl AppState for State {
     fn fixed_update(&mut self, ctx: &mut maple2d::Context) {}
 
     fn draw(&mut self, canvas: &mut maple2d::Canvas) {
+        canvas.fill_color = Color::rgb(0.0, 0.0, 0.0);
+        canvas.clear();
+
         canvas.fill_color = Color::rgb(1.0, 1.0, 1.0);
 
-        canvas.clipped(|canvas| {
-            canvas.rect().wh(20.0, 20.0).draw();
-        }, |canvas| {
-            canvas
-                .text("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.")
-                .w(100.0).draw();
-        });
+        if canvas.ctx().is_mouse_just_pressed(MouseButton::Left) {
+            *canvas.ctx().state("gaga", || 0) += 1;
+        }
 
-        println!("{}", canvas.ctx().mouse_wheel_delta());
+        let v = *canvas.ctx().state("gaga", || 0);
+
+        canvas.text(&format!("{}", v)).draw();
     }
 }
 

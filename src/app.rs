@@ -62,6 +62,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 render_frame: None,
                 fixed_tick: None,
             },
+            temp_states: AHashMap::new(),
         };
         let main_canvas =
             ctx.create_canvas_inner(window.inner_size().width, window.inner_size().height, true);
