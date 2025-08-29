@@ -14,7 +14,7 @@ use crate::{
             triangle::TriangleBuilder,
         },
     },
-    context::{CanvasContext, Context, DrawCall, texture::TextureKey},
+    context::{CanvasContext, Context, DrawCall, DrawCallType, texture::TextureKey},
     render::shaders::wgsl_common,
 };
 
@@ -28,6 +28,8 @@ new_key_type! {
 pub struct Canvas<'a> {
     pub(crate) key: CanvasKey,
     pub(crate) ctx: CanvasContext<'a>,
+
+    pub(crate) current_texture: Option<TextureKey>,
 
     pub fill_color: Color,
     pub stroke_color: Color,
@@ -45,6 +47,7 @@ impl<'a> Canvas<'a> {
         Self {
             key,
             ctx,
+            current_texture: None,
             fill_color: Color::rgb(0.25, 0.25, 0.25),
             stroke_color: Color::rgb(0.75, 0.75, 0.75),
             stroke_weight: 2.0,
@@ -71,19 +74,15 @@ impl<'a> Canvas<'a> {
                 .calls
                 .push(DrawCall {
                     start_vertex: self.ctx.inner.vertices.len() as u32,
-                    set_texture: Some(tex),
+                    typ: DrawCallType::Draw {
+                        set_texture: Some(tex),
+                    },
                 });
+            self.current_texture = Some(tex);
         }
     }
     pub fn current_texture(&mut self) -> Option<TextureKey> {
-        self.ctx
-            .passes
-            .last()
-            .unwrap()
-            .calls
-            .last()
-            .unwrap()
-            .set_texture
+        self.current_texture
     }
 
     pub fn set_transform(&mut self, transform: Affine2) {
@@ -129,30 +128,26 @@ impl<'a> Canvas<'a> {
         text_uv_b: Vec2,
         text_uv_c: Vec2,
     ) {
-        self.ctx
-            .vertices
-            .push(wgsl_common::structs::VertexInput::new(
+        self.ctx.inner.vertices.extend([
+            wgsl_common::structs::VertexInput::new(
                 self.transform.transform_point2(a).to_array(),
                 color_a.to_array(),
                 uv_a.to_array(),
                 text_uv_a.to_array(),
-            ));
-        self.ctx
-            .vertices
-            .push(wgsl_common::structs::VertexInput::new(
+            ),
+            wgsl_common::structs::VertexInput::new(
                 self.transform.transform_point2(b).to_array(),
                 color_b.to_array(),
                 uv_b.to_array(),
                 text_uv_b.to_array(),
-            ));
-        self.ctx
-            .vertices
-            .push(wgsl_common::structs::VertexInput::new(
+            ),
+            wgsl_common::structs::VertexInput::new(
                 self.transform.transform_point2(c).to_array(),
                 color_c.to_array(),
                 uv_c.to_array(),
                 text_uv_c.to_array(),
-            ));
+            ),
+        ]);
     }
     pub(crate) fn draw_stroke(&mut self, points: impl ExactSizeIterator<Item = Vec2> + Clone) {
         let n_verts = points.len() as u32 * 2;

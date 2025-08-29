@@ -79,10 +79,21 @@ pub struct RenderPass {
     pub(crate) calls: Vec<DrawCall>,
 }
 
+pub enum DrawCallType {
+    Draw {
+        // pub set_blend_mode: Option<BlendMode>,
+        set_texture: Option<TextureKey>,
+    },
+    ClipStart {
+        reference: u32,
+    },
+    ClipEnd {
+        reference: u32,
+    },
+}
 pub struct DrawCall {
     pub(crate) start_vertex: u32,
-    // pub set_blend_mode: Option<BlendMode>,
-    pub(crate) set_texture: Option<TextureKey>,
+    pub(crate) typ: DrawCallType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -515,20 +526,26 @@ impl Context {
                             .map(|c| c.start_vertex)
                             .unwrap_or(render_pass_end_vertex);
 
-                        // if let Some(mode) = call.set_blend_mode {
-                        //     render_pass.set_pipeline(match mode {
-                        //         BlendMode::Normal => &self.normal_pipeline,
-                        //         BlendMode::Additive => &self.additive_pipeline,
-                        //     });
-                        // }
-                        if let Some(tex) = call.set_texture {
-                            render_pass.set_bind_group(
-                                1,
-                                self.loaded_textures[tex].bind_group.get_bind_group(),
-                                &[],
-                            );
+                        match call.typ {
+                            DrawCallType::Draw { set_texture } => {
+                                // if let Some(mode) = call.set_blend_mode {
+                                //     render_pass.set_pipeline(match mode {
+                                //         BlendMode::Normal => &self.normal_pipeline,
+                                //         BlendMode::Additive => &self.additive_pipeline,
+                                //     });
+                                // }
+                                if let Some(tex) = set_texture {
+                                    render_pass.set_bind_group(
+                                        1,
+                                        self.loaded_textures[tex].bind_group.get_bind_group(),
+                                        &[],
+                                    );
+                                }
+                                render_pass.draw(call.start_vertex..call_end_vertex, 0..1);
+                            }
+                            DrawCallType::ClipStart { reference } => todo!(),
+                            DrawCallType::ClipEnd { reference } => todo!(),
                         }
-                        render_pass.draw(call.start_vertex..call_end_vertex, 0..1);
                     }
                 }
             }
@@ -549,7 +566,7 @@ impl<'a> CanvasContext<'a> {
             target_canvas: key,
             calls: vec![DrawCall {
                 start_vertex: self.inner.vertices.len() as u32,
-                set_texture: None,
+                typ: DrawCallType::Draw { set_texture: None },
             }],
         });
 
@@ -562,7 +579,7 @@ impl<'a> CanvasContext<'a> {
                 target_canvas: prev,
                 calls: vec![DrawCall {
                     start_vertex: self.inner.vertices.len() as u32,
-                    set_texture: None,
+                    typ: DrawCallType::Draw { set_texture: None },
                 }],
             });
         }
