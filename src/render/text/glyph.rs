@@ -182,8 +182,8 @@ pub fn prepare_glyph(
     let width = data.width as f32;
     let height = data.height as f32;
 
-    let points = [[0.0, 0.0], [width, 0.0], [width, height], [0.0, height]]
-        .map(|[p0, p1]| [p0 + x + offset_x, p1 + y + offset_y]);
+    let points =
+        [[0.0, 0.0], [width, 0.0], [width, height], [0.0, height]].map(|[p0, p1]| [p0 + x, p1 + y]);
 
     Some([
         wgsl_common::structs::VertexInput::new(points[0], color, [-1.0, 0.0], [atlas_x, atlas_y]),
