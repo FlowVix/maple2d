@@ -12,7 +12,7 @@ parking_lot = "0.12.4"
 pollster = "0.4.0"
 palette = "0.7.6"
 slotmap = "1.0.7"
-glam = "0.30.5"
+glam = { version = "0.30.5", features = ["serde"] }
 itertools = "0.14.0"
 cosmic-text = "0.14.2"
 lru = "0.16.0"
