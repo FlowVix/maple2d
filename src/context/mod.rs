@@ -663,7 +663,7 @@ impl Context {
     }
 }
 impl<'a> CanvasContext<'a> {
-    pub fn draw_canvas<F, R>(&mut self, key: CanvasKey, cb: F)
+    pub fn draw_canvas<F, R>(&mut self, key: CanvasKey, cb: F) -> R
     where
         F: FnOnce(&mut Canvas) -> R,
     {
