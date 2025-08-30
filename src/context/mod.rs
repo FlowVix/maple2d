@@ -663,9 +663,9 @@ impl Context {
     }
 }
 impl<'a> CanvasContext<'a> {
-    pub fn draw_canvas<F>(&mut self, key: CanvasKey, cb: F)
+    pub fn draw_canvas<F, R>(&mut self, key: CanvasKey, cb: F)
     where
-        F: FnOnce(&mut Canvas),
+        F: FnOnce(&mut Canvas) -> R,
     {
         let prev = self.inner.current_canvas.map(|canvas| {
             (canvas, {
@@ -693,7 +693,7 @@ impl<'a> CanvasContext<'a> {
 
         let mut canvas = Canvas::new(key, CanvasContext { inner: self.inner });
 
-        cb(&mut canvas);
+        let r = cb(&mut canvas);
 
         if let Some((prev_canvas, prev_reference)) = prev {
             self.inner.passes.push(RenderPass {
@@ -709,5 +709,7 @@ impl<'a> CanvasContext<'a> {
             });
         }
         self.current_canvas = prev.map(|v| v.0);
+
+        r
     }
 }

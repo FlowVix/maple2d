@@ -260,11 +260,11 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    pub fn clipped<C: FnOnce(&mut Canvas), F: FnOnce(&mut Canvas)>(
+    pub fn clipped<CR, FR, C: FnOnce(&mut Canvas) -> CR, F: FnOnce(&mut Canvas) -> FR>(
         &mut self,
         clip_cb: C,
         draw_cb: F,
-    ) {
+    ) -> (CR, FR) {
         self.ctx
             .inner
             .passes
@@ -279,7 +279,7 @@ impl<'a> Canvas<'a> {
             });
         self.stencil_reference += 1;
 
-        clip_cb(self);
+        let cr = clip_cb(self);
 
         self.ctx
             .inner
@@ -296,7 +296,7 @@ impl<'a> Canvas<'a> {
                 },
             });
 
-        draw_cb(self);
+        let fr = draw_cb(self);
 
         self.ctx
             .inner
@@ -313,6 +313,8 @@ impl<'a> Canvas<'a> {
                 },
             });
         self.stencil_reference -= 1;
+
+        (cr, fr)
     }
 
     pub fn clear(&mut self) {
