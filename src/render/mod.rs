@@ -43,6 +43,7 @@ impl GPUData {
     pub async fn new(
         target: impl Into<wgpu::SurfaceTarget<'static>>,
         backends: wgpu::Backends,
+        present_mode: wgpu::PresentMode,
     ) -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends,
@@ -86,7 +87,7 @@ impl GPUData {
             format: surface_format,
             width: 10,
             height: 10,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: present_mode,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
