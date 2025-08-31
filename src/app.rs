@@ -44,7 +44,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         let gpu_data = pollster::block_on(GPUData::new(
             window.clone(),
             wgpu::Backends::GL,
-            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::AutoVsync,
         ));
         let mut ctx = Context {
             window: window.clone(),
