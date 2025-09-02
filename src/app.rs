@@ -3,19 +3,19 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ahash::{AHashMap, AHashSet};
-use glam::{vec2, Vec2};
+use glam::{Vec2, vec2};
 use slotmap::SlotMap;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use crate::CanvasKey;
 use crate::context::{
     CanvasContext, Context, ContextRunMode, EitherKey, MouseWheelInfo, PressInfo,
 };
 use crate::render::GPUData;
 use crate::state::AppState;
-use crate::CanvasKey;
 
 struct AppData<S> {
     ctx: Context,
@@ -41,11 +41,13 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 .unwrap(),
         );
 
-        let gpu_data = pollster::block_on(GPUData::new(
+        let mut gpu_data = pollster::block_on(GPUData::new(
             window.clone(),
             wgpu::Backends::all(),
             wgpu::PresentMode::AutoVsync,
         ));
+        gpu_data.resize(window.inner_size().width, window.inner_size().height);
+
         let mut ctx = Context {
             window: window.clone(),
             gpu_data,
@@ -235,11 +237,13 @@ pub fn run_app<S: AppState>(fixed_update_rate: u32, window_attributes: WindowAtt
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let proxy = event_loop.create_proxy();
-    std::thread::spawn(move || loop {
-        let Ok(_) = proxy.send_event(CustomEvent::FixedUpdate) else {
-            break;
-        };
-        spin_sleep::sleep(Duration::from_secs_f64(1.0 / fixed_update_rate as f64));
+    std::thread::spawn(move || {
+        loop {
+            let Ok(_) = proxy.send_event(CustomEvent::FixedUpdate) else {
+                break;
+            };
+            spin_sleep::sleep(Duration::from_secs_f64(1.0 / fixed_update_rate as f64));
+        }
     });
 
     let mut app = App::<S> {
