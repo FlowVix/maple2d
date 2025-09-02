@@ -195,7 +195,11 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                     data.ctx.mouse_wheel_info.render_frame = Some(data.ctx.render_frame);
                     data.ctx.mouse_wheel_info.fixed_tick = Some(data.ctx.fixed_tick);
                 }
-                _ => {}
+                winit::event::MouseScrollDelta::PixelDelta(p) => {
+                    data.ctx.mouse_wheel_info.delta = vec2(p.x as f32, p.y as f32);
+                    data.ctx.mouse_wheel_info.render_frame = Some(data.ctx.render_frame);
+                    data.ctx.mouse_wheel_info.fixed_tick = Some(data.ctx.fixed_tick);
+                }
             },
             _ => (),
         }
