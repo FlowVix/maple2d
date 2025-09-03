@@ -27,7 +27,8 @@ pub struct GPUData {
 
     pub(crate) start_clip_pipeline: wgpu::RenderPipeline,
     pub(crate) end_clip_pipeline: wgpu::RenderPipeline,
-    pub(crate) draw_pipeline: wgpu::RenderPipeline,
+    pub(crate) draw_normal_pipeline: wgpu::RenderPipeline,
+    pub(crate) draw_additive_pipeline: wgpu::RenderPipeline,
 
     pub(crate) dummy_texture_bind: wgsl_draw::globals::BindGroup1,
 
@@ -238,11 +239,11 @@ impl GPUData {
             bias: Default::default(),
         });
 
-        let draw_pipeline = {
+        let draw_normal_pipeline = {
             let module = wgsl_draw::create_shader_module(&device);
 
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("draw_pipeline"),
+                label: Some("draw_normal_pipeline"),
                 layout: Some(&wgsl_draw::create_pipeline_layout(&device)),
                 vertex: make_vertex_state(
                     &module,
@@ -253,6 +254,50 @@ impl GPUData {
                     &wgsl_draw::entries::fragment_entry_fs_main(&[Some(wgpu::ColorTargetState {
                         format: surface_config.format,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })]),
+                )),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Cw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: draw_depth_stencil.clone(),
+                multisample: wgpu::MultisampleState {
+                    count: SAMPLE_COUNT,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            })
+        };
+        let draw_additive_pipeline = {
+            let module = wgsl_draw::create_shader_module(&device);
+
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("draw_additive_pipeline"),
+                layout: Some(&wgsl_draw::create_pipeline_layout(&device)),
+                vertex: make_vertex_state(
+                    &module,
+                    &wgsl_draw::entries::vertex_entry_vs_main(wgpu::VertexStepMode::Vertex),
+                ),
+                fragment: Some(make_fragment_state(
+                    &module,
+                    &wgsl_draw::entries::fragment_entry_fs_main(&[Some(wgpu::ColorTargetState {
+                        format: surface_config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent::OVER,
+                        }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })]),
                 )),
@@ -308,7 +353,8 @@ impl GPUData {
             surface_config,
             start_clip_pipeline,
             end_clip_pipeline,
-            draw_pipeline,
+            draw_normal_pipeline,
+            draw_additive_pipeline,
             dummy_texture_bind,
             mask_atlas,
             color_atlas,

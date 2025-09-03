@@ -14,7 +14,7 @@ use crate::{
             triangle::TriangleBuilder,
         },
     },
-    context::{CanvasContext, Context, DrawCall, DrawCallType, texture::TextureKey},
+    context::{BlendMode, CanvasContext, Context, DrawCall, DrawCallType, texture::TextureKey},
     render::shaders::wgsl_common,
 };
 
@@ -30,6 +30,7 @@ pub struct Canvas<'a> {
     pub(crate) ctx: CanvasContext<'a>,
 
     pub(crate) current_texture: Option<TextureKey>,
+    pub(crate) current_blend_mode: BlendMode,
     pub(crate) stencil_reference: u32,
 
     pub fill_color: Color,
@@ -49,6 +50,7 @@ impl<'a> Canvas<'a> {
             key,
             ctx,
             current_texture: None,
+            current_blend_mode: BlendMode::Normal,
             stencil_reference: 0,
             fill_color: Color::rgb(0.25, 0.25, 0.25),
             stroke_color: Color::rgb(0.75, 0.75, 0.75),
@@ -77,6 +79,7 @@ impl<'a> Canvas<'a> {
                 .push(DrawCall {
                     start_vertex: self.ctx.inner.vertices.len() as u32,
                     typ: DrawCallType::Draw {
+                        blend_mode: self.current_blend_mode,
                         set_texture: Some(tex),
                         reference: self.stencil_reference,
                         end_clip_reference: None,
@@ -85,8 +88,31 @@ impl<'a> Canvas<'a> {
             self.current_texture = Some(tex);
         }
     }
+    pub fn set_blend_mode(&mut self, mode: BlendMode) {
+        if mode != self.current_blend_mode() {
+            self.ctx
+                .inner
+                .passes
+                .last_mut()
+                .unwrap()
+                .calls
+                .push(DrawCall {
+                    start_vertex: self.ctx.inner.vertices.len() as u32,
+                    typ: DrawCallType::Draw {
+                        blend_mode: mode,
+                        set_texture: None,
+                        reference: self.stencil_reference,
+                        end_clip_reference: None,
+                    },
+                });
+            self.current_blend_mode = mode;
+        }
+    }
     pub fn current_texture(&mut self) -> Option<TextureKey> {
         self.current_texture
+    }
+    pub fn current_blend_mode(&mut self) -> BlendMode {
+        self.current_blend_mode
     }
 
     pub fn set_transform(&mut self, transform: Affine2) {
@@ -290,6 +316,7 @@ impl<'a> Canvas<'a> {
             .push(DrawCall {
                 start_vertex: self.ctx.inner.vertices.len() as u32,
                 typ: DrawCallType::Draw {
+                    blend_mode: self.current_blend_mode,
                     set_texture: None,
                     reference: self.stencil_reference,
                     end_clip_reference: None,
@@ -307,6 +334,7 @@ impl<'a> Canvas<'a> {
             .push(DrawCall {
                 start_vertex: self.ctx.inner.vertices.len() as u32,
                 typ: DrawCallType::Draw {
+                    blend_mode: self.current_blend_mode,
                     set_texture: None,
                     reference: self.stencil_reference - 1,
                     end_clip_reference: Some(self.stencil_reference),

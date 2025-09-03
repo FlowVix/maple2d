@@ -6,7 +6,7 @@ use std::{
 use glam::vec2;
 use image::ImageReader;
 use itertools::Itertools;
-use maple2d::{AppState, CanvasKey, Color, TextureFilter, TextureKey, run_app};
+use maple2d::{AppState, BlendMode, CanvasKey, Color, TextureFilter, TextureKey, run_app};
 use winit::{
     event::MouseButton,
     keyboard::{Key, KeyCode, PhysicalKey},
@@ -32,15 +32,13 @@ impl AppState for State {
         canvas.fill_color = Color::rgb(0.0, 0.0, 0.0);
         canvas.clear();
 
-        canvas.fill_color = Color::rgb(1.0, 1.0, 1.0);
+        canvas.set_blend_mode(BlendMode::Additive);
 
-        if canvas.ctx().is_mouse_just_pressed(MouseButton::Left) {
-            *canvas.ctx().state("gaga", || 0) += 1;
-        }
-
-        let v = *canvas.ctx().state("gaga", || 0);
-
-        canvas.text(&format!("{}", v)).draw();
+        canvas.draw_stroke = false;
+        canvas.fill_color = Color::rgb(1.0, 0.0, 0.0);
+        canvas.rect().xy(0.0, 0.0).wh(100.0, 100.0).draw();
+        canvas.fill_color = Color::rgb(0.0, 1.0, 0.0);
+        canvas.rect().xy(50.0, 50.0).wh(100.0, 100.0).draw();
     }
 }
 

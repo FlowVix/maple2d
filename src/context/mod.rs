@@ -87,9 +87,15 @@ pub struct RenderPass {
     pub(crate) calls: Vec<DrawCall>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BlendMode {
+    Normal,
+    Additive,
+}
+
 pub enum DrawCallType {
     Draw {
-        // pub set_blend_mode: Option<BlendMode>,
+        blend_mode: BlendMode,
         set_texture: Option<TextureKey>,
         reference: u32,
         end_clip_reference: Option<u32>,
@@ -621,6 +627,7 @@ impl Context {
 
                         match call.typ {
                             DrawCallType::Draw {
+                                blend_mode,
                                 set_texture,
                                 reference,
                                 end_clip_reference,
@@ -630,12 +637,6 @@ impl Context {
                                     render_pass.set_stencil_reference(end_reference);
                                     render_pass.draw(0..3, 0..1);
                                 }
-                                // if let Some(mode) = call.set_blend_mode {
-                                //     render_pass.set_pipeline(match mode {
-                                //         BlendMode::Normal => &self.normal_pipeline,
-                                //         BlendMode::Additive => &self.additive_pipeline,
-                                //     });
-                                // }
                                 if let Some(tex) = set_texture {
                                     render_pass.set_bind_group(
                                         1,
@@ -643,7 +644,10 @@ impl Context {
                                         &[],
                                     );
                                 }
-                                render_pass.set_pipeline(&self.gpu_data.draw_pipeline);
+                                render_pass.set_pipeline(match blend_mode {
+                                    BlendMode::Normal => &self.gpu_data.draw_normal_pipeline,
+                                    BlendMode::Additive => &self.gpu_data.draw_additive_pipeline,
+                                });
                                 render_pass.set_stencil_reference(reference);
                                 render_pass.draw(call.start_vertex..call_end_vertex, 0..1);
                             }
@@ -668,14 +672,15 @@ impl<'a> CanvasContext<'a> {
         F: FnOnce(&mut Canvas) -> R,
     {
         let prev = self.inner.current_canvas.map(|canvas| {
-            (canvas, {
-                let DrawCallType::Draw { reference, .. } =
-                    self.inner.passes.last().unwrap().calls.last().unwrap().typ
-                else {
-                    panic!("started sub-canvas draw during clip draw")
-                };
-                reference
-            })
+            let DrawCallType::Draw {
+                reference,
+                blend_mode,
+                ..
+            } = self.inner.passes.last().unwrap().calls.last().unwrap().typ
+            else {
+                panic!("started sub-canvas draw during clip draw")
+            };
+            (canvas, reference, blend_mode)
         });
 
         self.inner.current_canvas = Some(key);
@@ -684,6 +689,7 @@ impl<'a> CanvasContext<'a> {
             calls: vec![DrawCall {
                 start_vertex: self.inner.vertices.len() as u32,
                 typ: DrawCallType::Draw {
+                    blend_mode: BlendMode::Normal,
                     set_texture: None,
                     reference: 0,
                     end_clip_reference: None,
@@ -695,12 +701,13 @@ impl<'a> CanvasContext<'a> {
 
         let r = cb(&mut canvas);
 
-        if let Some((prev_canvas, prev_reference)) = prev {
+        if let Some((prev_canvas, prev_reference, prev_blend_mode)) = prev {
             self.inner.passes.push(RenderPass {
                 target_canvas: prev_canvas,
                 calls: vec![DrawCall {
                     start_vertex: self.inner.vertices.len() as u32,
                     typ: DrawCallType::Draw {
+                        blend_mode: prev_blend_mode,
                         set_texture: None,
                         reference: prev_reference,
                         end_clip_reference: None,
