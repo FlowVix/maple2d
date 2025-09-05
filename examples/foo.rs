@@ -32,13 +32,14 @@ impl AppState for State {
         canvas.fill_color = Color::rgb(0.0, 0.0, 0.0);
         canvas.clear();
 
-        canvas.set_blend_mode(BlendMode::Additive);
-
+        canvas.fill_color = Color::rgb(1.0, 1.0, 1.0);
         canvas.draw_stroke = false;
-        canvas.fill_color = Color::rgb(1.0, 0.0, 0.0);
-        canvas.rect().xy(0.0, 0.0).wh(100.0, 100.0).draw();
-        canvas.fill_color = Color::rgb(0.0, 1.0, 0.0);
-        canvas.rect().xy(50.0, 50.0).wh(100.0, 100.0).draw();
+        let mouse_pos = canvas.ctx().mouse_pos();
+        canvas
+            .rect()
+            .xy(mouse_pos.x, mouse_pos.y)
+            .wh(50.0, 50.0)
+            .draw();
     }
 }
 

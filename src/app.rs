@@ -5,9 +5,10 @@ use std::time::{Duration, Instant};
 use ahash::{AHashMap, AHashSet};
 use glam::{Vec2, vec2};
 use slotmap::SlotMap;
+use wgpu::SurfaceTexture;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::CanvasKey;
@@ -29,10 +30,12 @@ struct App<S> {
     data: Option<AppData<S>>,
     present_mode: wgpu::PresentMode,
     backends: wgpu::Backends,
+    proxy: Arc<EventLoopProxy<CustomEvent>>,
 }
 
 enum CustomEvent {
     FixedUpdate,
+    Render(SurfaceTexture),
 }
 
 impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
@@ -98,24 +101,15 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                     .resize_canvas(data.main_canvas, to.width, to.height);
             }
             WindowEvent::RedrawRequested => {
-                let elapsed = data.last.elapsed().as_secs_f64();
-                data.last = Instant::now();
-
-                data.ctx.reset_draw();
-
-                data.ctx.run_mode = ContextRunMode::Render;
-                CanvasContext {
-                    inner: &mut data.ctx,
-                }
-                .draw_canvas(data.main_canvas, |canvas| {
-                    data.state.draw(canvas);
+                // println!("Redraw requested");
+                let proxy = self.proxy.clone();
+                let surface = data.ctx.gpu_data.surface.clone();
+                std::thread::spawn(move || {
+                    let Ok(output) = surface.get_current_texture() else {
+                        return;
+                    };
+                    _ = proxy.send_event(CustomEvent::Render(output));
                 });
-                data.ctx.run_mode = ContextRunMode::None;
-                data.ctx.render_frame += 1;
-
-                data.ctx.render();
-
-                data.ctx.window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
@@ -153,6 +147,10 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.state.key_event(event, &mut data.ctx);
             }
             WindowEvent::CursorMoved { position, .. } => {
+                // let elapsed = data.last.elapsed().as_secs_f64();
+                // data.last = Instant::now();
+                // println!("{}", 1.0 / elapsed);
+                // println!("Cursor moved");
                 data.ctx.mouse_pos = vec2(position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -233,6 +231,23 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
 
                 data.ctx.fixed_tick += 1;
             }
+            CustomEvent::Render(surface_texture) => {
+                // println!("render");
+                data.ctx.reset_draw();
+
+                data.ctx.run_mode = ContextRunMode::Render;
+                CanvasContext {
+                    inner: &mut data.ctx,
+                }
+                .draw_canvas(data.main_canvas, |canvas| {
+                    data.state.draw(canvas);
+                });
+                data.ctx.run_mode = ContextRunMode::None;
+                data.ctx.render_frame += 1;
+
+                data.ctx.render(surface_texture);
+                data.ctx.window.request_redraw();
+            }
         }
     }
 }
@@ -262,6 +277,7 @@ pub fn run_app<S: AppState>(
         attrs: Some(window_attributes),
         present_mode,
         backends,
+        proxy: Arc::new(event_loop.create_proxy()),
     };
     event_loop.run_app(&mut app).unwrap();
 }

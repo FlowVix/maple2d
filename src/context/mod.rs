@@ -8,13 +8,14 @@ use std::{
     ops::{Deref, DerefMut},
     path::Path,
     sync::Arc,
+    time::Instant,
 };
 
 use ahash::{AHashMap, AHashSet};
 use glam::{UVec2, Vec2, uvec2};
 use image::ImageReader;
 use slotmap::{SlotMap, new_key_type};
-use wgpu::util::DeviceExt;
+use wgpu::{SurfaceTexture, util::DeviceExt};
 use winit::{event::MouseButton, keyboard::SmolStr, window::Window};
 
 use crate::{
@@ -52,7 +53,7 @@ pub struct Context {
     pub(crate) mouse_wheel_info: MouseWheelInfo,
 
     // state related
-    pub(crate) temp_states: AHashMap<(SmolStr, TypeId), Box<dyn Any>>,
+    pub(crate) temp_states: AHashMap<(SmolStr, TypeId), Box<dyn Any + Send + Sync>>,
 }
 pub struct CanvasContext<'a> {
     pub(crate) inner: &'a mut Context,
@@ -515,7 +516,7 @@ impl Context {
         uvec2(t.width(), t.height())
     }
 
-    pub fn state<T: 'static, F: FnOnce() -> T>(
+    pub fn state<T: 'static + Send + Sync, F: FnOnce() -> T>(
         &mut self,
         key: impl Into<SmolStr>,
         default: F,
@@ -529,10 +530,10 @@ impl Context {
             .unwrap()
     }
 
-    pub(crate) fn render(&self) {
-        let Ok(output) = self.gpu_data.surface.get_current_texture() else {
-            return;
-        };
+    pub(crate) fn render(&self, output: SurfaceTexture) {
+        // let Ok(output) = self.gpu_data.surface.get_current_texture() else {
+        //     return;
+        // };
         let output_view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

@@ -1,4 +1,4 @@
-use std::mem::offset_of;
+use std::{mem::offset_of, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
@@ -18,7 +18,7 @@ pub mod texture;
 pub const SAMPLE_COUNT: u32 = 4;
 
 pub struct GPUData {
-    pub(crate) surface: wgpu::Surface<'static>,
+    pub(crate) surface: Arc<wgpu::Surface<'static>>,
 
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -346,7 +346,7 @@ impl GPUData {
         let text_atlas_bind_group = create_atlases_bind_group(&device, &mask_atlas, &color_atlas);
 
         Self {
-            surface,
+            surface: Arc::new(surface),
             device,
             queue,
             surface_format,
