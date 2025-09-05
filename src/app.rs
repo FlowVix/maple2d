@@ -27,6 +27,7 @@ struct AppData<S> {
 struct App<S> {
     attrs: Option<WindowAttributes>,
     data: Option<AppData<S>>,
+    present_mode: wgpu::PresentMode,
 }
 
 enum CustomEvent {
@@ -44,7 +45,7 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         let mut gpu_data = pollster::block_on(GPUData::new(
             window.clone(),
             wgpu::Backends::all(),
-            wgpu::PresentMode::AutoVsync,
+            self.present_mode,
         ));
         gpu_data.resize(window.inner_size().width, window.inner_size().height);
 
@@ -235,7 +236,11 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
     }
 }
 
-pub fn run_app<S: AppState>(fixed_update_rate: u32, window_attributes: WindowAttributes) {
+pub fn run_app<S: AppState>(
+    fixed_update_rate: u32,
+    window_attributes: WindowAttributes,
+    present_mode: wgpu::PresentMode,
+) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -253,6 +258,7 @@ pub fn run_app<S: AppState>(fixed_update_rate: u32, window_attributes: WindowAtt
     let mut app = App::<S> {
         data: None,
         attrs: Some(window_attributes),
+        present_mode,
     };
     event_loop.run_app(&mut app).unwrap();
 }

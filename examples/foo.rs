@@ -43,5 +43,9 @@ impl AppState for State {
 }
 
 fn main() {
-    run_app::<State>(60, Window::default_attributes());
+    run_app::<State>(
+        60,
+        Window::default_attributes(),
+        wgpu::PresentMode::AutoVsync,
+    );
 }
