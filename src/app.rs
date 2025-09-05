@@ -96,26 +96,26 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.ctx
                     .resize_canvas(data.main_canvas, to.width, to.height);
             }
-            WindowEvent::RedrawRequested => {
-                let elapsed = data.last.elapsed().as_secs_f64();
-                data.last = Instant::now();
+            // WindowEvent::RedrawRequested => {
+            //     let elapsed = data.last.elapsed().as_secs_f64();
+            //     data.last = Instant::now();
 
-                data.ctx.reset_draw();
+            //     data.ctx.reset_draw();
 
-                data.ctx.run_mode = ContextRunMode::Render;
-                CanvasContext {
-                    inner: &mut data.ctx,
-                }
-                .draw_canvas(data.main_canvas, |canvas| {
-                    data.state.draw(canvas);
-                });
-                data.ctx.run_mode = ContextRunMode::None;
-                data.ctx.render_frame += 1;
+            //     data.ctx.run_mode = ContextRunMode::Render;
+            //     CanvasContext {
+            //         inner: &mut data.ctx,
+            //     }
+            //     .draw_canvas(data.main_canvas, |canvas| {
+            //         data.state.draw(canvas);
+            //     });
+            //     data.ctx.run_mode = ContextRunMode::None;
+            //     data.ctx.render_frame += 1;
 
-                data.ctx.render();
+            //     data.ctx.render();
 
-                data.ctx.window.request_redraw();
-            }
+            //     data.ctx.window.request_redraw();
+            // }
             WindowEvent::KeyboardInput { event, .. } => {
                 if !event.repeat {
                     let k1 = EitherKey::Physical(event.physical_key);
@@ -233,6 +233,31 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.ctx.fixed_tick += 1;
             }
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(data) = &mut self.data else {
+            return;
+        };
+
+        let elapsed = data.last.elapsed().as_secs_f64();
+        data.last = Instant::now();
+
+        data.ctx.reset_draw();
+
+        data.ctx.run_mode = ContextRunMode::Render;
+        CanvasContext {
+            inner: &mut data.ctx,
+        }
+        .draw_canvas(data.main_canvas, |canvas| {
+            data.state.draw(canvas);
+        });
+        data.ctx.run_mode = ContextRunMode::None;
+        data.ctx.render_frame += 1;
+
+        data.ctx.render();
+
+        data.ctx.window.request_redraw();
     }
 }
 
