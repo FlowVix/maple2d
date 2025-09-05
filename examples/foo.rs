@@ -47,5 +47,6 @@ fn main() {
         60,
         Window::default_attributes(),
         wgpu::PresentMode::AutoVsync,
+        wgpu::Backends::all(),
     );
 }
