@@ -156,9 +156,9 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.state.key_event(event, &mut data.ctx);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let elapsed = data.last.elapsed().as_secs_f64();
-                data.last = Instant::now();
-                println!("{}", 1.0 / elapsed);
+                // let elapsed = data.last.elapsed().as_secs_f64();
+                // data.last = Instant::now();
+                // println!("{}", 1.0 / elapsed);
                 // println!("Cursor moved");
                 data.ctx.mouse_pos = vec2(position.x as f32, position.y as f32);
             }
