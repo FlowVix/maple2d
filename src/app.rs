@@ -4,9 +4,11 @@ use std::time::{Duration, Instant};
 
 use ahash::{AHashMap, AHashSet};
 use glam::{Vec2, vec2};
+use parking_lot::Mutex;
 use slotmap::SlotMap;
 use wgpu::SurfaceTexture;
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowAttributes, WindowId};
@@ -31,11 +33,14 @@ struct App<S> {
     present_mode: wgpu::PresentMode,
     backends: wgpu::Backends,
     proxy: Arc<EventLoopProxy<CustomEvent>>,
+    output: Arc<Mutex<Option<SurfaceTexture>>>,
+    do_resize: Option<PhysicalSize<u32>>,
+    do_close: bool,
 }
 
 enum CustomEvent {
     FixedUpdate,
-    Render(SurfaceTexture),
+    Render,
 }
 
 impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
@@ -93,22 +98,26 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         };
         match event {
             WindowEvent::CloseRequested => {
-                event_loop.exit();
+                self.do_close = true;
             }
             WindowEvent::Resized(to) => {
-                data.ctx.gpu_data.resize(to.width, to.height);
-                data.ctx
-                    .resize_canvas(data.main_canvas, to.width, to.height);
+                self.do_resize = Some(to);
             }
             WindowEvent::RedrawRequested => {
                 // println!("Redraw requested");
                 let proxy = self.proxy.clone();
                 let surface = data.ctx.gpu_data.surface.clone();
+                let output = self.output.clone();
                 std::thread::spawn(move || {
-                    let Ok(output) = surface.get_current_texture() else {
+                    let output = &mut *output.lock();
+                    if output.is_some() {
+                        return;
+                    }
+                    let Ok(o) = surface.get_current_texture() else {
                         return;
                     };
-                    _ = proxy.send_event(CustomEvent::Render(output));
+                    *output = Some(o);
+                    _ = proxy.send_event(CustomEvent::Render);
                 });
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -147,9 +156,9 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.state.key_event(event, &mut data.ctx);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // let elapsed = data.last.elapsed().as_secs_f64();
-                // data.last = Instant::now();
-                // println!("{}", 1.0 / elapsed);
+                let elapsed = data.last.elapsed().as_secs_f64();
+                data.last = Instant::now();
+                println!("{}", 1.0 / elapsed);
                 // println!("Cursor moved");
                 data.ctx.mouse_pos = vec2(position.x as f32, position.y as f32);
             }
@@ -231,7 +240,17 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
 
                 data.ctx.fixed_tick += 1;
             }
-            CustomEvent::Render(surface_texture) => {
+            CustomEvent::Render => {
+                if self.do_close {
+                    drop(self.output.lock().take());
+                    event_loop.exit();
+                    return;
+                }
+                let output_ref = &mut *self.output.lock();
+
+                let Some(output) = output_ref.take() else {
+                    return;
+                };
                 // println!("render");
                 data.ctx.reset_draw();
 
@@ -245,8 +264,15 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.ctx.run_mode = ContextRunMode::None;
                 data.ctx.render_frame += 1;
 
-                data.ctx.render(surface_texture);
+                data.ctx.render(output);
                 data.ctx.window.request_redraw();
+
+                if let Some(to) = self.do_resize {
+                    data.ctx.gpu_data.resize(to.width, to.height);
+                    data.ctx
+                        .resize_canvas(data.main_canvas, to.width, to.height);
+                    self.do_resize = None;
+                }
             }
         }
     }
@@ -278,6 +304,9 @@ pub fn run_app<S: AppState>(
         present_mode,
         backends,
         proxy: Arc::new(event_loop.create_proxy()),
+        output: Arc::new(Mutex::new(None)),
+        do_resize: None,
+        do_close: false,
     };
     event_loop.run_app(&mut app).unwrap();
 }
