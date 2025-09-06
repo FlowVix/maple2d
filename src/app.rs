@@ -35,7 +35,6 @@ struct App<S> {
     proxy: Arc<EventLoopProxy<CustomEvent>>,
     output: Arc<Mutex<Option<SurfaceTexture>>>,
     do_resize: Option<PhysicalSize<u32>>,
-    do_close: bool,
 }
 
 enum CustomEvent {
@@ -98,7 +97,8 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
         };
         match event {
             WindowEvent::CloseRequested => {
-                self.do_close = true;
+                drop(self.output.lock().take());
+                event_loop.exit();
             }
             WindowEvent::Resized(to) => {
                 self.do_resize = Some(to);
@@ -241,11 +241,6 @@ impl<S: AppState> ApplicationHandler<CustomEvent> for App<S> {
                 data.ctx.fixed_tick += 1;
             }
             CustomEvent::Render => {
-                if self.do_close {
-                    drop(self.output.lock().take());
-                    event_loop.exit();
-                    return;
-                }
                 let output_ref = &mut *self.output.lock();
 
                 let Some(output) = output_ref.take() else {
@@ -306,7 +301,6 @@ pub fn run_app<S: AppState>(
         proxy: Arc::new(event_loop.create_proxy()),
         output: Arc::new(Mutex::new(None)),
         do_resize: None,
-        do_close: false,
     };
     event_loop.run_app(&mut app).unwrap();
 }
